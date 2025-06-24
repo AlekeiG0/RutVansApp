@@ -1,188 +1,125 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'repo_ventas.dart';
-import 'detallado_ventas.dart';
-import '../widgets/App_Scaffold.dart';
+import '../services/api_service.dart';
+import '../widgets/app_scaffold.dart';
+import '../pages/repo_ventas.dart';
+import '../pages/detallado_ventas.dart';
 
-// 🔹 Modelo de transacción
-class Transaccion {
-  final String titulo;
-  final String fecha;
-  final String hora;
-  final double monto;
-  final bool esIngreso;
-  final IconData icono;
 
-  Transaccion({
-    required this.titulo,
-    required this.fecha,
-    required this.hora,
-    required this.monto,
-    required this.esIngreso,
-    required this.icono,
-  });
-}
-
-// 🔹 Tarjeta general reutilizable
-class CustomCard extends StatelessWidget {
-  final String title;
-  final Widget content;
-
-  const CustomCard({
-    super.key,
-    required this.title,
-    required this.content,
-  });
+class FinanzasPage extends StatefulWidget {
+  const FinanzasPage({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
-          content,
-        ],
-      ),
-    );
+  State<FinanzasPage> createState() => _FinanzasPageState();
+}
+
+class _FinanzasPageState extends State<FinanzasPage> {
+  double ingresos = 0;
+  double egresos = 0;
+  double balance = 0;
+  List<Map<String, dynamic>> ventasPorDia = [];
+  List<Map<String, dynamic>> transacciones = [];
+
+  DateTime? filtroDesde;
+  DateTime? filtroHasta;
+  final DateFormat formatter = DateFormat('yyyy-MM-dd');
+
+  bool cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    initializeDateFormatting('es_ES', null).then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => cargarDatos());
+    });
   }
-}
 
-// 🔹 Tarjeta individual (Ingresos, Egresos, Balance)
-class FinanceCard extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
-  final Color color;
+  Future<void> cargarDatos() async {
+    if (!mounted) return;
+    setState(() => cargando = true);
 
-  const FinanceCard({
-    super.key,
-    required this.icon,
-    required this.value,
-    required this.label,
-    required this.color,
-  });
+    try {
+      final data = await ApiService.getResumenFinanciero(
+        desde: filtroDesde != null ? formatter.format(filtroDesde!) : null,
+        hasta: filtroHasta != null ? formatter.format(filtroHasta!) : null,
+      );
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.15),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              )),
-          const SizedBox(height: 4),
-          Text(label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              )),
-        ],
-      ),
-    );
+      if (!mounted) return;
+      setState(() {
+        ingresos = (data['ingresos'] as num).toDouble();
+        egresos = (data['egresos'] as num).toDouble();
+        balance = (data['balance'] as num).toDouble();
+        ventasPorDia = List<Map<String, dynamic>>.from(data['ventasPorDia']);
+        transacciones = List<Map<String, dynamic>>.from(data['transacciones']);
+        cargando = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('Error cargando datos resumen: $e');
+      setState(() => cargando = false);
+    }
   }
-}
 
-// 🔸 Página principal de Finanzas
-class FinanzasPage extends StatelessWidget {
-  const FinanzasPage({super.key});
+  void limpiarFiltro() {
+    filtroDesde = null;
+    filtroHasta = null;
+    cargarDatos();
+  }
 
-  // 🔸 Datos simulados de transacciones
-  static final List<Transaccion> _transacciones = [
-    Transaccion(
-      titulo: 'Venta de boletos',
-      fecha: 'Hoy',
-      hora: '10:30 AM',
-      monto: 450.00,
-      esIngreso: true,
-      icono: Icons.directions_bus,
-    ),
-    Transaccion(
-      titulo: 'Combustible',
-      fecha: 'Ayer',
-      hora: '3:15 PM',
-      monto: 1200.00,
-      esIngreso: false,
-      icono: Icons.local_gas_station,
-    ),
-    Transaccion(
-      titulo: 'Mantenimiento',
-      fecha: 'Ayer',
-      hora: '9:00 AM',
-      monto: 850.00,
-      esIngreso: false,
-      icono: Icons.build,
-    ),
-  ];
+  Future<void> seleccionarFecha(BuildContext context, bool esDesde) async {
+    DateTime inicial = esDesde ? (filtroDesde ?? DateTime.now()) : (filtroHasta ?? DateTime.now());
+
+    final fecha = await showDatePicker(
+      context: context,
+      initialDate: inicial,
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now(),
+    );
+
+    if (fecha != null) {
+      setState(() {
+        if (esDesde) {
+          filtroDesde = fecha;
+        } else {
+          filtroHasta = fecha;
+        }
+      });
+      cargarDatos();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final fechaActual = DateFormat('EEEE, dd MMMM yyyy', 'es_ES').format(DateTime.now());
+
     return AppScaffold(
       currentIndex: 1,
-      currentDrawerIndex: 1, 
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+      body: cargando
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
-                  _buildSummaryCards(),
+                  _buildEncabezado(fechaActual),
                   const SizedBox(height: 20),
-                  _buildSalesChart(),
+                  _buildTarjetasResumen(),
                   const SizedBox(height: 20),
-                  _buildRecentTransactions(),
-                  const SizedBox(height: 20),
-                  _buildSalesReportButton(context),
+                  _buildChart(),
                   const SizedBox(height: 10),
-                  _buildDetailedReportButton(context),
+                  _buildBotonesReportes(context),
                   const SizedBox(height: 20),
+                  _buildFiltroFechas(context),
+                  const SizedBox(height: 20),
+                  _buildTransaccionesRecientes(),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 
-  // 🟧 Encabezado
-  Widget _buildHeader() {
+  Widget _buildEncabezado(String fechaActual) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -190,211 +127,234 @@ class FinanzasPage extends StatelessWidget {
         color: Colors.orange,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(30)),
       ),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Resumen Financiero',
+          const Text('Resumen Financiero',
               style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
-          SizedBox(height: 5),
+          const SizedBox(height: 4),
           Text('Vista general de ingresos, egresos y ventas',
-              style: TextStyle(fontSize: 14, color: Colors.white)),
+              style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.9))),
+          const SizedBox(height: 8),
+          Text('Hoy: $fechaActual',
+              style: const TextStyle(fontSize: 12, color: Colors.white70)),
+          if (filtroDesde != null || filtroHasta != null)
+            Text(
+              'Filtro activo: ${filtroDesde != null ? formatter.format(filtroDesde!) : ''} - ${filtroHasta != null ? formatter.format(filtroHasta!) : ''}',
+              style: const TextStyle(fontSize: 12, color: Colors.white),
+            ),
         ],
       ),
     );
   }
 
-  // 🟩 Tarjetas resumen
-  Widget _buildSummaryCards() {
+  Widget _buildTarjetasResumen() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: const [
+      children: [
+        _financeCard(Icons.trending_up, ingresos, 'Ingresos', Colors.green),
+        _financeCard(Icons.trending_down, egresos, 'Egresos', Colors.red),
+        _financeCard(Icons.attach_money, balance, 'Balance', Colors.blue),
+      ],
+    );
+  }
+
+  Widget _financeCard(IconData icon, double monto, String label, Color color) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 5)],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(height: 8),
+            Text('\$${monto.toStringAsFixed(2)}',
+                style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChart() {
+    if (ventasPorDia.isEmpty) {
+      return const Text('Sin datos suficientes para la gráfica');
+    }
+
+    final maxY = ventasPorDia
+            .map((e) => (e['total'] as num).toDouble())
+            .reduce((a, b) => a > b ? a : b) *
+        1.2;
+
+    return SizedBox(
+      height: 200,
+      child: BarChart(
+        BarChartData(
+          maxY: maxY,
+          titlesData: FlTitlesData(
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (value, _) {
+                  final index = value.toInt();
+                  if (index >= ventasPorDia.length) return const SizedBox();
+                  final fecha = DateTime.parse(ventasPorDia[index]['fecha']);
+                  return Text(DateFormat('dd/MM').format(fecha),
+                      style: const TextStyle(fontSize: 10));
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                getTitlesWidget: (value, _) => Text('\$${value.toInt()}',
+                    style: const TextStyle(fontSize: 10)),
+              ),
+            ),
+            topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          barGroups: List.generate(ventasPorDia.length, (index) {
+            final total = (ventasPorDia[index]['total'] as num).toDouble();
+            return BarChartGroupData(
+              x: index,
+              barRods: [
+                BarChartRodData(
+                  toY: total,
+                  width: 14,
+                  borderRadius: BorderRadius.circular(4),
+                  gradient: const LinearGradient(
+                    colors: [Colors.orange, Colors.deepOrange],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                  ),
+                )
+              ],
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBotonesReportes(BuildContext context) {
+    return Row(
+      children: [
         Expanded(
-          child: FinanceCard(
-            icon: Icons.trending_up,
-            value: '\$100000.00',
-            label: 'Ingresos',
-            color: Colors.green,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            icon: const Icon(Icons.bar_chart),
+            label: const Text('Generar Reporte de Ventas'),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RepoVentasPage()),
+              );
+            },
           ),
         ),
-        SizedBox(width: 10),
+        const SizedBox(width: 10),
         Expanded(
-          child: FinanceCard(
-            icon: Icons.trending_down,
-            value: '\$300.00',
-            label: 'Egresos',
-            color: Colors.red,
-          ),
-        ),
-        SizedBox(width: 10),
-        Expanded(
-          child: FinanceCard(
-            icon: Icons.attach_money,
-            value: '\$99700.00',
-            label: 'Balance',
-            color: Colors.blue,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepOrange,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            icon: const Icon(Icons.insert_chart_outlined),
+            label: const Text('Ver Reporte Detallado'),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DetalladoVentasPage()),
+              );
+            },
           ),
         ),
       ],
     );
   }
 
-  // 🟦 Historial de ventas - gráfico de barras
-  Widget _buildSalesChart() {
-    final List<double> ventasUltimos7Dias = [12000, 11300, 870, 950, 820, 680, 12300];
-    final dias = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-    final double maxY = ventasUltimos7Dias.reduce((a, b) => a > b ? a : b) * 1.2;
-
-    return CustomCard(
-      title: 'Historial de Ventas (Últimos 7 días)',
-      content: SizedBox(
-        height: 200,
-        child: BarChart(
-          BarChartData(
-            alignment: BarChartAlignment.spaceAround,
-            maxY: maxY,
-            barTouchData: BarTouchData(enabled: false),
-            titlesData: FlTitlesData(
-              show: true,
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) {
-                    return Text(dias[value.toInt() % dias.length]);
-                  },
-                  reservedSize: 30,
-                ),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  getTitlesWidget: (value, meta) {
-                    return Text('\$${value.toInt()}');
-                  },
-                  reservedSize: 40,
-                ),
-              ),
-              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            gridData: FlGridData(show: false),
-            borderData: FlBorderData(show: false),
-            barGroups: List.generate(
-              ventasUltimos7Dias.length,
-              (index) => BarChartGroupData(
-                x: index,
-                barRods: [
-                  BarChartRodData(
-                    toY: ventasUltimos7Dias[index],
-                    width: 16,
-                    borderRadius: BorderRadius.circular(4),
-                    gradient: const LinearGradient(
-                      colors: [Colors.orange, Colors.deepOrange],
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  Widget _buildFiltroFechas(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => seleccionarFecha(context, true),
+            child: _dateBox('Desde', filtroDesde),
           ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => seleccionarFecha(context, false),
+            child: _dateBox('Hasta', filtroHasta),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.clear),
+          onPressed: limpiarFiltro,
+        ),
+      ],
     );
   }
 
-  // 🟨 Transacciones recientes
-  Widget _buildRecentTransactions() {
-    return CustomCard(
-      title: 'Transacciones Recientes',
-      content: Column(
-        children: _transacciones.map((tx) => _buildTransactionItem(tx)).toList(),
+  Widget _dateBox(String label, DateTime? value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange),
       ),
-    );
-  }
-
-  Widget _buildTransactionItem(Transaccion tx) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: tx.esIngreso ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(tx.icono, color: tx.esIngreso ? Colors.green : Colors.red),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tx.titulo, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text('${tx.fecha}, ${tx.hora}',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-          ),
-          Text(
-            '\$${tx.monto.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: tx.esIngreso ? Colors.green : Colors.red,
-            ),
-          ),
+          Text(value != null ? formatter.format(value) : label,
+              style: const TextStyle(color: Colors.black87)),
+          const Spacer(),
+          const Icon(Icons.calendar_today, size: 16, color: Colors.orange),
         ],
       ),
     );
   }
 
-  // 🟧 Botón: Generar reporte
-  Widget _buildSalesReportButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+  Widget _buildTransaccionesRecientes() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Transacciones Recientes',
+              style: Theme.of(context).textTheme.titleMedium),
         ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SalesReportPage()),
-          );
-        },
-        child: const Text(
-          'Generar Reporte de Ventas',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      ),
+        const SizedBox(height: 10),
+        ...transacciones.map((tx) => _transaccionItem(tx)).toList(),
+      ],
     );
   }
 
-  // 🟨 Botón: Ver reporte detallado
-  Widget _buildDetailedReportButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepOrange,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const DetailedSalesReportPage()),
-          );
-        },
-        child: const Text(
-          'Ver Reporte Detallado',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+  Widget _transaccionItem(Map<String, dynamic> tx) {
+    DateTime? date =
+        tx['created_at'] != null ? DateTime.tryParse(tx['created_at']) : null;
+    final fecha = date != null ? formatter.format(date) : '—';
+    final monto = (tx['amount'] as num?)?.toDouble() ?? 0.0;
+
+    return ListTile(
+      leading: const Icon(Icons.attach_money, color: Colors.green),
+      title: Text('Folio: ${tx['folio']}'),
+      subtitle: Text('Fecha: $fecha'),
+      trailing: Text(
+        '\$${monto.toStringAsFixed(2)}',
+        style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
       ),
     );
   }

@@ -1,91 +1,161 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../widgets/App_Scaffold.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:excel/excel.dart';
+import 'dart:typed_data';
+import '../services/api_service.dart';
+import '../widgets/app_scaffold.dart';
 
-class DetailedSalesReportPage extends StatefulWidget {
-  const DetailedSalesReportPage({super.key});
+class DetalladoVentasPage extends StatefulWidget {
+  const DetalladoVentasPage({Key? key}) : super(key: key);
 
   @override
-  State<DetailedSalesReportPage> createState() => _DetailedSalesReportPageState();
+  State<DetalladoVentasPage> createState() => _DetalladoVentasPageState();
 }
 
-class _DetailedSalesReportPageState extends State<DetailedSalesReportPage> {
-  DateTime fechaSeleccionada = DateTime(2023, 5, 15);
-  final DateFormat formatter = DateFormat('dd/MM/yyyy');
+class _DetalladoVentasPageState extends State<DetalladoVentasPage> {
+  DateTime fechaSeleccionada = DateTime.now();
+  final DateFormat formatter = DateFormat('yyyy-MM-dd');
+  final DateFormat displayFormatter = DateFormat('dd/MM/yyyy');
 
-  // Simulaciones de ventas por fecha
-  final Map<String, List<Map<String, dynamic>>> ventasPorFecha = {
-    '15/05/2023': [
-      {'hora': '10:00 AM', 'ruta': 'Lima - Arequipa', 'monto': 150.0},
-      {'hora': '12:30 PM', 'ruta': 'Lima - Trujillo', 'monto': 230.0},
-      {'hora': '4:00 PM', 'ruta': 'Lima - Chiclayo', 'monto': 180.0},
-    ],
-    '16/05/2023': [],
-  };
+  List<Map<String, dynamic>> ventas = [];
+  bool cargando = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarVentas();
+  }
+
+  Future<void> _cargarVentas() async {
+    setState(() => cargando = true);
+    try {
+      final data = await ApiService.getVentasPorFecha(
+        fecha: formatter.format(fechaSeleccionada),
+      );
+      setState(() {
+        ventas = List<Map<String, dynamic>>.from(data['ventas'] ?? []);
+      });
+    } catch (e) {
+      print('Error al cargar ventas: $e');
+    } finally {
+      setState(() => cargando = false);
+    }
+  }
+
+  Future<void> _seleccionarFecha() async {
+    final nuevaFecha = await showDatePicker(
+      context: context,
+      initialDate: fechaSeleccionada,
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now(),
+    );
+    if (nuevaFecha != null) {
+      setState(() => fechaSeleccionada = nuevaFecha);
+      _cargarVentas();
+    }
+  }
+
+  Future<void> _exportarPDF() async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        build: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text('Reporte Detallado - ${displayFormatter.format(fechaSeleccionada)}',
+                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 20),
+            ...ventas.map((v) => pw.Text(
+              'Folio: ${v['folio']} - \$${v['amount']} - Fecha: ${v['created_at']}',
+            )),
+          ],
+        ),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
+  }
+
+  Future<void> _exportarExcel() async {
+    final excel = Excel.createExcel();
+    final sheet = excel['Ventas'];
+
+    sheet.appendRow(['Folio', 'Monto', 'Fecha']);
+
+    for (var v in ventas) {
+      sheet.appendRow([v['folio'], v['amount'], v['created_at']]);
+    }
+
+    final bytes = excel.save();
+    if (bytes != null) {
+      await Printing.sharePdf(
+        bytes: Uint8List.fromList(bytes),
+        filename: 'ventas_${formatter.format(fechaSeleccionada)}.xlsx',
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final String fechaStr = formatter.format(fechaSeleccionada);
-    final ventasHoy = ventasPorFecha[fechaStr] ?? [];
-
-    final double totalHoy = ventasHoy.fold(0.0, (sum, v) => sum + v['monto']);
-    final int totalTransacciones = ventasHoy.length;
-    final double promedio = totalTransacciones == 0 ? 0 : totalHoy / totalTransacciones;
+    final total = ventas.fold(0.0, (sum, v) => sum + (v['amount'] ?? 0.0));
+    final promedio = ventas.isNotEmpty ? total / ventas.length : 0.0;
 
     return AppScaffold(
       currentIndex: 0,
-      body: SingleChildScrollView(
+      body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildTitle(),
+            const Text('Detalle de Ventas por Día',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _seleccionarFecha,
+                  icon: const Icon(Icons.calendar_today),
+                  label: Text(displayFormatter.format(fechaSeleccionada)),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                  tooltip: 'Exportar PDF',
+                  onPressed: ventas.isEmpty ? null : _exportarPDF,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.table_chart, color: Colors.green),
+                  tooltip: 'Exportar Excel',
+                  onPressed: ventas.isEmpty ? null : _exportarExcel,
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
-            _buildDateSelector(),
+            _buildResumen(total, ventas.length, promedio),
             const SizedBox(height: 20),
-            _buildDaySummary(totalHoy, totalTransacciones, promedio),
-            const SizedBox(height: 20),
-            ventasHoy.isNotEmpty
-                ? _buildSalesList(ventasHoy)
-                : _buildNoSalesMessage(),
+            Expanded(
+              child: cargando
+                  ? const Center(child: CircularProgressIndicator())
+                  : ventas.isEmpty
+                      ? _buildNoSalesMessage()
+                      : ListView.builder(
+                          itemCount: ventas.length,
+                          itemBuilder: (_, i) => _buildVentaItem(ventas[i]),
+                        ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTitle() {
-    return const Text(
-      'Detalle de Ventas por Día',
-      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
-    );
-  }
-
-  Widget _buildDateSelector() {
-    return ElevatedButton.icon(
-      icon: const Icon(Icons.calendar_today),
-      label: Text(formatter.format(fechaSeleccionada)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      onPressed: () async {
-        final nuevaFecha = await showDatePicker(
-          context: context,
-          initialDate: fechaSeleccionada,
-          firstDate: DateTime(2023, 1, 1),
-          lastDate: DateTime(2023, 12, 31),
-        );
-        if (nuevaFecha != null) {
-          setState(() => fechaSeleccionada = nuevaFecha);
-        }
-      },
-    );
-  }
-
-  Widget _buildDaySummary(double total, int transacciones, double promedio) {
+  Widget _buildResumen(double total, int transacciones, double promedio) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -96,15 +166,15 @@ class _DetailedSalesReportPageState extends State<DetailedSalesReportPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildSummaryItem('Total', '\$${total.toStringAsFixed(2)}', Colors.blue),
-          _buildSummaryItem('Transacciones', '$transacciones', Colors.green),
-          _buildSummaryItem('Promedio', '\$${promedio.toStringAsFixed(2)}', Colors.orange),
+          _buildResumenItem('Total', '\$${total.toStringAsFixed(2)}', Colors.blue),
+          _buildResumenItem('Transacciones', '$transacciones', Colors.green),
+          _buildResumenItem('Promedio', '\$${promedio.toStringAsFixed(2)}', Colors.orange),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryItem(String label, String value, Color color) {
+  Widget _buildResumenItem(String label, String value, Color color) {
     return Column(
       children: [
         CircleAvatar(
@@ -118,30 +188,19 @@ class _DetailedSalesReportPageState extends State<DetailedSalesReportPage> {
     );
   }
 
-  Widget _buildSalesList(List<Map<String, dynamic>> ventas) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: ventas.map((venta) {
-        return _buildSaleItem(
-          venta['hora'],
-          venta['ruta'],
-          venta['monto'],
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildSaleItem(String hora, String ruta, double monto) {
+  Widget _buildVentaItem(Map<String, dynamic> venta) {
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: ListTile(
-        leading: const Icon(Icons.directions_bus, color: Colors.orange),
-        title: Text(ruta, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(hora),
-        trailing: Text('\$${monto.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+        leading: const Icon(Icons.receipt_long, color: Colors.orange),
+        title: Text('Folio: ${venta['folio'] ?? '—'}'),
+        subtitle: Text('Fecha: ${venta['created_at'] ?? '—'}'),
+        trailing: Text(
+          '\$${(venta['amount'] ?? 0.0).toStringAsFixed(2)}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }

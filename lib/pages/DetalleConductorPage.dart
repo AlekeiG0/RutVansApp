@@ -1,11 +1,12 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class DetalleConductorPage extends StatefulWidget {
-  final Map<String, String> conductor;
+  final Map<String, dynamic> conductor; // dinámico para poder manejar num, null, etc
 
   const DetalleConductorPage({super.key, required this.conductor});
 
@@ -84,12 +85,78 @@ class _DetalleConductorPageState extends State<DetalleConductorPage> {
     );
   }
 
+  Widget _buildImage(String? ruta) {
+    if (ruta == null || ruta.isEmpty) {
+      return const CircleAvatar(
+        radius: 50,
+        backgroundColor: Colors.grey,
+        child: Icon(Icons.person, size: 50, color: Colors.white),
+      );
+    }
+
+    if (kIsWeb) {
+      if (ruta.startsWith('http') || ruta.startsWith('blob:')) {
+        return ClipOval(
+          child: Image.network(
+            ruta,
+            width: 100,
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.broken_image, size: 100),
+          ),
+        );
+      } else {
+        return ClipOval(
+          child: Image.asset(
+            ruta,
+            width: 100,
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.image_not_supported, size: 100),
+          ),
+        );
+      }
+    } else {
+      if (ruta.startsWith('/') || ruta.contains('\\')) {
+        return ClipOval(
+          child: Image.file(
+            File(ruta),
+            width: 100,
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.broken_image, size: 100),
+          ),
+        );
+      } else {
+        return ClipOval(
+          child: Image.asset(
+            ruta,
+            width: 100,
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                const Icon(Icons.image_not_supported, size: 100),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final conductor = widget.conductor;
+    final nombre = conductor['nombre']?.toString() ?? 'Conductor';
+    final edad = conductor['edad']?.toString() ?? 'N/A';
+    final experiencia = conductor['experiencia']?.toString() ?? 'N/A';
+    final telefono = conductor['telefono']?.toString() ?? '';
+    final foto = conductor['foto']?.toString() ?? '';
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(conductor['nombre'] ?? 'Conductor'),
+        title: Text(nombre),
         backgroundColor: Colors.orange,
         foregroundColor: Colors.white,
       ),
@@ -98,35 +165,28 @@ class _DetalleConductorPageState extends State<DetalleConductorPage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              Center(
-                child: ClipOval(
-                  child: Image.asset(
-                    conductor['foto']!,
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
+              Center(child: _buildImage(foto)),
               const SizedBox(height: 16),
               Text(
-                conductor['nombre']!,
+                nombre,
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              Text('Edad: ${conductor['edad']} años'),
-              Text('Experiencia: ${conductor['experiencia']}'),
-              Text('Teléfono: ${conductor['telefono']}'),
+              Text('Edad: $edad años'),
+              Text('Experiencia: $experiencia'),
+              Text('Teléfono: $telefono'),
               const SizedBox(height: 20),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: [
-                  _buildBtn(Icons.call, 'Llamar', () => _llamar(conductor['telefono']!)),
-                  _buildBtn(FontAwesomeIcons.whatsapp, 'WhatsApp', () => _whatsapp(conductor['telefono']!)),
+                  if (telefono.isNotEmpty) ...[
+                    _buildBtn(Icons.call, 'Llamar', () => _llamar(telefono)),
+                    _buildBtn(FontAwesomeIcons.whatsapp, 'WhatsApp', () => _whatsapp(telefono)),
+                    _buildBtn(Icons.sms, 'SMS', () => _sms(telefono)),
+                  ],
                   _buildBtn(Icons.email, 'Correo', _correo),
-                  _buildBtn(Icons.sms, 'SMS', () => _sms(conductor['telefono']!)),
                   _buildBtn(Icons.camera_alt, 'Cámara', _abrirCamara),
                   _buildBtn(Icons.photo, 'Galería', _abrirGaleria),
                   _buildBtn(Icons.map, 'Maps', _maps),

@@ -3,7 +3,3 @@ const USER_COLLECTION = "user";
 const ROUTE_COLLECTION = "route";
 const LOCALITY_COLLECTION = "localities";
 const DRIVER_COLLECTION = "drivers";
-
-
-//user = "user_demo";
-//password = "oQtqgH27o6sUXBnP";

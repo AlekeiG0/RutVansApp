@@ -1,24 +1,92 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import '../services/api_service.dart';
 import '../widgets/App_Scaffold.dart';
 
-class SalesReportPage extends StatelessWidget {
-  const SalesReportPage({super.key});
+class RepoVentasPage extends StatefulWidget {
+  const RepoVentasPage({super.key});
 
-  // Simulación de datos
-  final List<double> ventasPorDia = const [450, 620, 300, 750, 480, 890, 920];
-  final List<String> dias = const ['1', '5', '10', '15', '20', '25', '30'];
+  @override
+  State<RepoVentasPage> createState() => _RepoVentasPageState();
+}
 
-  final List<Map<String, dynamic>> rutas = const [
-    {'nombre': 'Lima - Arequipa', 'monto': '\$2,450 (28%)', 'porcentaje': 0.28},
-    {'nombre': 'Lima - Trujillo', 'monto': '\$1,890 (22%)', 'porcentaje': 0.22},
-    {'nombre': 'Lima - Chiclayo', 'monto': '\$1,560 (18%)', 'porcentaje': 0.18},
-    {'nombre': 'Lima - Piura', 'monto': '\$1,200 (14%)', 'porcentaje': 0.14},
-    {'nombre': 'Otros', 'monto': '\$1,460 (18%)', 'porcentaje': 0.18},
-  ];
+class _RepoVentasPageState extends State<RepoVentasPage> {
+  final DateFormat formatter = DateFormat('yyyy-MM-dd');
+  final DateFormat mostrar = DateFormat('dd/MM/yyyy');
+
+  DateTime? filtroDesde;
+  DateTime? filtroHasta;
+  bool cargando = false;
+
+  double total = 0;
+  double promedio = 0;
+  int transacciones = 0;
+
+  List<Map<String, dynamic>> balanceHistorico = [];
+  List<Map<String, dynamic>> topRutas = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final hoy = DateTime.now();
+    filtroHasta = hoy;
+    filtroDesde = hoy.subtract(const Duration(days: 30));
+    cargarDatos();
+  }
+
+  Future<void> cargarDatos() async {
+    if (filtroDesde == null || filtroHasta == null) return;
+
+    setState(() => cargando = true);
+
+    final desdeStr = formatter.format(filtroDesde!);
+    final hastaStr = formatter.format(filtroHasta!);
+
+    try {
+      final resumen = await ApiService.getVentasPeriodo(desde: desdeStr, hasta: hastaStr);
+      final balance = await ApiService.getBalanceHistorico(
+        periodo: 'daily',
+        desde: desdeStr,
+        hasta: hastaStr,
+      );
+      final rutas = await ApiService.getTopRutas(desde: desdeStr, hasta: hastaStr);
+
+      setState(() {
+        total = (resumen['total'] as num).toDouble();
+        promedio = (resumen['promedio'] as num).toDouble();
+        transacciones = (resumen['transacciones'] as num).toInt();
+
+        balanceHistorico = balance;
+        topRutas = rutas;
+      });
+    } catch (e) {
+      print('Error al cargar datos: $e');
+    }
+
+    setState(() => cargando = false);
+  }
+
+  Future<void> seleccionarFecha(BuildContext context, bool esDesde) async {
+    final inicial = esDesde ? filtroDesde! : filtroHasta!;
+    final fecha = await showDatePicker(
+      context: context,
+      initialDate: inicial,
+      firstDate: DateTime(2023, 1, 1),
+      lastDate: DateTime.now(),
+    );
+
+    if (fecha != null) {
+      setState(() {
+        if (esDesde) {
+          filtroDesde = fecha;
+        } else {
+          filtroHasta = fecha;
+        }
+      });
+      cargarDatos();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,114 +94,103 @@ class SalesReportPage extends StatelessWidget {
       currentIndex: 0,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTitleSection(),
-            const SizedBox(height: 20),
-            _buildDateSelector(),
-            const SizedBox(height: 20),
-            _buildSalesSummary(),
-            const SizedBox(height: 20),
-            _buildDetailedChart(),
-            const SizedBox(height: 20),
-            _buildTopRoutesList(),
-            const SizedBox(height: 30),
-            _buildExportButton(context),
-          ],
-        ),
+        child: cargando
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildTitle(),
+                  const SizedBox(height: 20),
+                  _buildDateFilters(),
+                  const SizedBox(height: 20),
+                  _buildResumenFinanciero(),
+                  const SizedBox(height: 20),
+                  _buildGraficoBalance(),
+                  const SizedBox(height: 20),
+                  _buildTopRutas(),
+                ],
+              ),
       ),
     );
   }
 
-  // ------------------------- WIDGETS -------------------------
-
-  Widget _buildTitleSection() {
+  Widget _buildTitle() {
     return const Text(
-      'Reporte de Ventas',
+      'Reporte General de Ventas',
       style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     );
   }
 
-  Widget _buildDateSelector() {
+  Widget _buildDateFilters() {
     return Row(
       children: [
         Expanded(
-          child: _buildDateRangeButton(
-            label: 'Fecha Inicio',
-            date: '01/05/2023',
-            icon: Icons.calendar_today,
+          child: GestureDetector(
+            onTap: () => seleccionarFecha(context, true),
+            child: _dateBox('Desde', filtroDesde),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
-          child: _buildDateRangeButton(
-            label: 'Fecha Fin',
-            date: '31/05/2023',
-            icon: Icons.calendar_today,
+          child: GestureDetector(
+            onTap: () => seleccionarFecha(context, false),
+            child: _dateBox('Hasta', filtroHasta),
           ),
         ),
+        IconButton(
+          onPressed: () {
+            final hoy = DateTime.now();
+            setState(() {
+              filtroHasta = hoy;
+              filtroDesde = hoy.subtract(const Duration(days: 30));
+            });
+            cargarDatos();
+          },
+          icon: const Icon(Icons.refresh),
+        )
       ],
     );
   }
 
-  Widget _buildDateRangeButton({
-    required String label,
-    required String date,
-    required IconData icon,
-  }) {
+  Widget _dateBox(String label, DateTime? value) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: const [BoxShadow(blurRadius: 3, color: Colors.black12)],
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Icon(icon, size: 18, color: Colors.orange),
-              const SizedBox(width: 8),
-              Text(date, style: const TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
+          Text(value != null ? mostrar.format(value) : label,
+              style: const TextStyle(color: Colors.black87)),
+          const Spacer(),
+          const Icon(Icons.calendar_today, size: 16, color: Colors.orange),
         ],
       ),
     );
   }
 
-  Widget _buildSalesSummary() {
+  Widget _buildResumenFinanciero() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black12)],
+        boxShadow: [BoxShadow(blurRadius: 4, color: Colors.black12)],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          const Text('Resumen de Ventas',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildSummaryItem('Total Ventas', '\$8,560', Colors.blue),
-              _buildSummaryItem('Ventas Diarias', '\$285', Colors.green),
-              _buildSummaryItem('Transacciones', '30', Colors.orange),
-            ],
-          ),
+          _resumenItem('Total', '\$${total.toStringAsFixed(2)}', Colors.blue),
+          _resumenItem('Transacciones', '$transacciones', Colors.green),
+          _resumenItem('Promedio', '\$${promedio.toStringAsFixed(2)}', Colors.orange),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryItem(String title, String value, Color color) {
+  Widget _resumenItem(String label, String value, Color color) {
     return Column(
       children: [
         CircleAvatar(
@@ -141,14 +198,25 @@ class SalesReportPage extends StatelessWidget {
           child: Icon(Icons.attach_money, color: color),
         ),
         const SizedBox(height: 8),
-        Text(value,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
-        Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
       ],
     );
   }
 
-  Widget _buildDetailedChart() {
+  Widget _buildGraficoBalance() {
+    if (balanceHistorico.isEmpty) {
+      return const Text('No hay datos suficientes para mostrar el gráfico.');
+    }
+
+    final spots = balanceHistorico.asMap().entries.map((entry) {
+      final index = entry.key;
+      final monto = (entry.value['balance'] as num?)?.toDouble() ?? 0.0;
+      return FlSpot(index.toDouble(), monto);
+    }).toList();
+
+    final maxY = spots.map((e) => e.y).fold(0.0, (a, b) => a > b ? a : b) * 1.2;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -159,54 +227,23 @@ class SalesReportPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Ventas por Día',
+          const Text('Ingresos por Día',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           SizedBox(
             height: 200,
             child: LineChart(
               LineChartData(
-                gridData: FlGridData(show: false),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 30,
-                      getTitlesWidget: (value, meta) {
-                        final index = value.toInt();
-                        if (index < dias.length) {
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: Text(dias[index]),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 40,
-                      getTitlesWidget: (value, meta) {
-                        return Text('\$${value.toInt()}');
-                      },
-                    ),
-                  ),
-                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: false),
                 minX: 0,
-                maxX: 6,
+                maxX: (spots.length - 1).toDouble(),
                 minY: 0,
-                maxY: 1000,
+                maxY: maxY,
+                gridData: FlGridData(show: false),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: List.generate(
-                      ventasPorDia.length,
-                      (i) => FlSpot(i.toDouble(), ventasPorDia[i]),
-                    ),
+                    spots: spots,
                     isCurved: true,
                     color: Colors.orange,
                     barWidth: 3,
@@ -216,13 +253,13 @@ class SalesReportPage extends StatelessWidget {
                       gradient: LinearGradient(
                         colors: [
                           Colors.orange.withOpacity(0.3),
-                          Colors.orange.withOpacity(0.1)
+                          Colors.orange.withOpacity(0.1),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
                     ),
-                  ),
+                  )
                 ],
               ),
             ),
@@ -232,7 +269,7 @@ class SalesReportPage extends StatelessWidget {
     );
   }
 
-  Widget _buildTopRoutesList() {
+  Widget _buildTopRutas() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -243,146 +280,35 @@ class SalesReportPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Rutas Más Vendidas',
+          const Text('Rutas más vendidas',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          ...rutas.map((ruta) => _buildTopRouteItem(
-            ruta['nombre'],
-            ruta['monto'],
-            ruta['porcentaje'],
-          )),
+          ...topRutas.map((ruta) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(ruta['nombre'],
+                            style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(ruta['monto'], style: const TextStyle(color: Colors.orange)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(
+                      value: ruta['porcentaje'] ?? 0.0,
+                      backgroundColor: Colors.grey[200],
+                      color: Colors.orange,
+                      minHeight: 6,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
-    );
-  }
-
-  Widget _buildTopRouteItem(String route, String amount, double percentage) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(route, style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(amount, style: const TextStyle(color: Colors.orange)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          LinearProgressIndicator(
-            value: percentage,
-            backgroundColor: Colors.grey[200],
-            color: Colors.orange,
-            minHeight: 6,
-            borderRadius: BorderRadius.circular(3),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExportButton(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
-        label: const Text('Exportar a PDF',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.orange,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        onPressed: () => _generateAndPrintPdf(context),
-      ),
-    );
-  }
-
-  Future<void> _generateAndPrintPdf(BuildContext context) async {
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.Page(
-        build: (pw.Context context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Header(
-              level: 0,
-              child: pw.Text('Reporte de Ventas - Mayo 2023',
-                  style: pw.TextStyle(
-                      fontSize: 24, fontWeight: pw.FontWeight.bold)),
-            ),
-            pw.SizedBox(height: 20),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Fecha Inicio: 01/05/2023'),
-                pw.Text('Fecha Fin: 31/05/2023'),
-              ],
-            ),
-            pw.Divider(),
-            pw.SizedBox(height: 20),
-            pw.Text('Resumen de Ventas',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 10),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceAround,
-              children: [
-                _buildPdfSummaryItem('Total Ventas', '\$8,560'),
-                _buildPdfSummaryItem('Ventas Diarias', '\$285'),
-                _buildPdfSummaryItem('Transacciones', '30'),
-              ],
-            ),
-            pw.SizedBox(height: 20),
-            pw.Text('Rutas Más Vendidas',
-                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 10),
-            pw.Table.fromTextArray(
-              context: context,
-              data: const [
-                ['Ruta', 'Monto', 'Porcentaje'],
-                ['Lima - Arequipa', '\$2,450', '28%'],
-                ['Lima - Trujillo', '\$1,890', '22%'],
-                ['Lima - Chiclayo', '\$1,560', '18%'],
-                ['Lima - Piura', '\$1,200', '14%'],
-                ['Otros', '\$1,460', '18%'],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Reporte PDF generado con éxito'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  pw.Widget _buildPdfSummaryItem(String title, String value) {
-    return pw.Column(
-      children: [
-        pw.Container(
-          width: 60,
-          height: 60,
-          decoration: const pw.BoxDecoration(
-            shape: pw.BoxShape.circle,
-            color: PdfColors.orange100,
-          ),
-          child: pw.Center(
-            child: pw.Text(value,
-                style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-          ),
-        ),
-        pw.SizedBox(height: 5),
-        pw.Text(title, style: const pw.TextStyle(fontSize: 12)),
-      ],
     );
   }
 }
