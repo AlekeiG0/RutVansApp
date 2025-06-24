@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../dbHelper/mongodb.dart';
 import '../widgets/App_Scaffold.dart';
+import '../dbHelper/locality_db.dart';
 
 class LocalitiesPage extends StatefulWidget {
   const LocalitiesPage({Key? key}) : super(key: key);
@@ -26,7 +27,7 @@ class _LocalitiesPageState extends State<LocalitiesPage> {
   Future<void> _fetchLocalities() async {
     try {
       await MongoDatabase.connect();
-      final data = await MongoDatabase.getAllLocalities();
+      final data = await LocalityService.getAllLocalities();
       setState(() {
         _localities = data;
         _loading = false;
@@ -170,7 +171,7 @@ class _LocalitiesPageState extends State<LocalitiesPage> {
                             1)
                         : 1;
 
-                    await MongoDatabase.addLocality({
+                    await LocalityService.addLocality({
                       'id': newId,
                       'longitude': longitude,
                       'latitude': latitude,
@@ -333,7 +334,7 @@ class _LocalitiesPageState extends State<LocalitiesPage> {
           },
           onDismissed: (direction) async {
             try {
-              await MongoDatabase.deleteLocality(loc['id'] as int);
+              await LocalityService.deleteLocality(loc['id'] as int);
               setState(() {
                 _localities.removeAt(index);
               });

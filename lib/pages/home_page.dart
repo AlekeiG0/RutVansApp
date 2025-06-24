@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../widgets/ResumenCards.dart';
 import '../dbHelper/mongodb.dart';
+import '../dbHelper/route_db.dart';
+import '../dbHelper/driver_db.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -30,9 +32,9 @@ class _HomePageState extends State<HomePage> {
   Future<void> cargarDatosResumen() async {
     try {
       // Obtener todas las rutas
-      final rutas = await MongoDatabase.getAllRoutes();
+      final rutas = await RouteService.getAllRoutes();
       // Obtener todos los conductores
-      final drivers = await MongoDatabase.getAllDrivers();
+      final drivers = await DriverService.getAllDrivers();
 
       print("Rutas obtenidas: ${rutas.length}");
       print("Conductores obtenidos: ${drivers.length}");

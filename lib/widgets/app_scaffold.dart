@@ -3,7 +3,7 @@ import '../pages/ListaConductoresPage.dart';
 import '../pages/NotificacionesPage.dart';
 import '../pages/finanzas.dart';
 import '../pages/home_page.dart';
-import '../pages/RutasParadasPage.dart';
+import '../pages/LocalidadesPage.dart';
 import '../pages/GestionPasajerosPage.dart';
 import '../pages/Gestion_Incidencias_Page.dart';
 import '../pages/Veiculos.dart';

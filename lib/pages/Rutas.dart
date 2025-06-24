@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../dbHelper/mongodb.dart';
+import '../dbHelper/route_db.dart';
+import '../dbHelper/locality_db.dart';
 import '../widgets/App_Scaffold.dart';
 
 class RutasPage extends StatefulWidget {
@@ -20,14 +22,11 @@ class _RutasPageState extends State<RutasPage> {
     _fetchRutas();
   }
 
-  // Función para mostrar un diálogo de carga modal
   void _mostrarCargando() {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
   }
 
@@ -35,8 +34,8 @@ class _RutasPageState extends State<RutasPage> {
     try {
       await MongoDatabase.connect();
 
-      final rutasData = await MongoDatabase.getAllRoutes();
-      final localitiesData = await MongoDatabase.getAllLocalities();
+      final rutasData = await RouteService.getAllRoutes();
+      final localitiesData = await LocalityService.getAllLocalities();
 
       final rutasCompletas = rutasData.map((ruta) {
         final inicio = localitiesData.firstWhere(
@@ -82,7 +81,7 @@ class _RutasPageState extends State<RutasPage> {
     if (confirm == true) {
       try {
         _mostrarCargando();
-        await MongoDatabase.deleteRoute(rutaId);
+        await RouteService.deleteRoute(rutaId);
         Navigator.pop(context); // Cierra el diálogo de carga
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ruta eliminada')),
@@ -98,80 +97,79 @@ class _RutasPageState extends State<RutasPage> {
   }
 
   @override
-Widget build(BuildContext context) {
-  return AppScaffold(
-    currentIndex: 0,
-    currentDrawerIndex: 4, 
-    body: Scaffold(
-      appBar: AppBar(title: const Text('Rutas')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _rutas.length,
-                  itemBuilder: (context, index) {
-                    final ruta = _rutas[index];
-                    final inicio = ruta['inicio'];
-                    final fin = ruta['fin'];
+  Widget build(BuildContext context) {
+    return AppScaffold(
+      currentIndex: 0,
+      currentDrawerIndex: 4,
+      body: Scaffold(
+        appBar: AppBar(title: const Text('Rutas')),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? Center(
+                    child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _rutas.length,
+                    itemBuilder: (context, index) {
+                      final ruta = _rutas[index];
+                      final inicio = ruta['inicio'];
+                      final fin = ruta['fin'];
 
-                    return Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.alt_route, color: Colors.teal, size: 28),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    '${inicio['locality']} → ${fin['locality']}',
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      return Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.alt_route, color: Colors.teal, size: 28),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      '${inicio['locality']} → ${fin['locality']}',
+                                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                                  onPressed: () => _mostrarFormularioRuta(context, editar: true, ruta: ruta),
-                                  tooltip: 'Editar',
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                  onPressed: () => _eliminarRuta(ruta['id']),
-                                  tooltip: 'Eliminar',
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text('🚐 Desde: ${inicio['street']}, ${inicio['municipality']}'),
-                            Text('🚐 Hacia: ${fin['street']}, ${fin['municipality']}'),
-                            Text('📍 ${inicio['state']}, ${inicio['country']}'),
-                          ],
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                                    onPressed: () => _mostrarFormularioRuta(context, editar: true, ruta: ruta),
+                                    tooltip: 'Editar',
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                    onPressed: () => _eliminarRuta(ruta['id']),
+                                    tooltip: 'Eliminar',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text('🚐 Desde: ${inicio['street']}, ${inicio['municipality']}'),
+                              Text('🚐 Hacia: ${fin['street']}, ${fin['municipality']}'),
+                              Text('📍 ${inicio['state']}, ${inicio['country']}'),
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _mostrarFormularioRuta(context),
-        icon: const Icon(Icons.add),
-        label: const Text('Agregar Ruta'),
-        backgroundColor: Colors.teal,
+                      );
+                    },
+                  ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => _mostrarFormularioRuta(context),
+          icon: const Icon(Icons.add),
+          label: const Text('Agregar Ruta'),
+          backgroundColor: Colors.teal,
+        ),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   void _mostrarFormularioRuta(BuildContext context, {bool editar = false, Map<String, dynamic>? ruta}) async {
-    final localidades = await MongoDatabase.getAllLocalities();
+    final localidades = await LocalityService.getAllLocalities();
 
     int? selectedInicioId = editar ? int.tryParse(ruta!['inicio']['id'].toString()) : null;
     int? selectedFinId = editar ? int.tryParse(ruta!['fin']['id'].toString()) : null;
@@ -227,53 +225,47 @@ Widget build(BuildContext context) {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.save),
                   label: Text(editar ? 'Guardar cambios' : 'Guardar'),
-             onPressed: () async {
-  if (selectedInicioId != null && selectedFinId != null) {
-    // Mostrar diálogo y esperar un instante para que se renderice
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    // Pequeña espera para que el diálogo se renderice antes de la operación
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    try {
-      if (editar && ruta != null) {
-        final rutaEditada = {
-          'id_location_s': selectedInicioId,
-          'id_location_f': selectedFinId,
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-        await MongoDatabase.updateRoute(ruta['id'], rutaEditada);
-      } else {
-        final nuevaRuta = {
-          'id': DateTime.now().millisecondsSinceEpoch,
-          'id_location_s': selectedInicioId,
-          'id_location_f': selectedFinId,
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
-        };
-        await MongoDatabase.addRoute(nuevaRuta);
-      }
-
-      Navigator.pop(context); // Cerrar diálogo carga
-      Navigator.pop(context); // Cerrar formulario bottom sheet
-      _fetchRutas();
-    } catch (e) {
-      Navigator.pop(context); // Cerrar diálogo carga
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error al guardar la ruta')),
-      );
-    }
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Selecciona ambas localidades')),
-    );
-  }
-},
-
+                  onPressed: () async {
+                    if (selectedInicioId != null && selectedFinId != null) {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => const Center(child: CircularProgressIndicator()),
+                      );
+                      await Future.delayed(const Duration(milliseconds: 100));
+                      try {
+                        if (editar && ruta != null) {
+                          final rutaEditada = {
+                            'id_location_s': selectedInicioId,
+                            'id_location_f': selectedFinId,
+                            'updated_at': DateTime.now().toIso8601String(),
+                          };
+                          await RouteService.updateRoute(ruta['id'], rutaEditada);
+                        } else {
+                          final nuevaRuta = {
+                            'id': DateTime.now().millisecondsSinceEpoch,
+                            'id_location_s': selectedInicioId,
+                            'id_location_f': selectedFinId,
+                            'created_at': DateTime.now().toIso8601String(),
+                            'updated_at': DateTime.now().toIso8601String(),
+                          };
+                          await RouteService.addRoute(nuevaRuta);
+                        }
+                        Navigator.pop(context);
+                        Navigator.pop(context);
+                        _fetchRutas();
+                      } catch (e) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Error al guardar la ruta')),
+                        );
+                      }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Selecciona ambas localidades')),
+                      );
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.teal,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
