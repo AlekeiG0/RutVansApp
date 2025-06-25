@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:pdf/pdf.dart' as pw; // Added PdfPageFormat and PdfColor
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import '../widgets/App_Scaffold.dart';
@@ -19,9 +20,17 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   String rutasActivas = '0';
-  String viajesHoy = '24'; // Puedes cambiar después a real si tienes datos
+  String ventasTotales = '0';
   String conductores = '0';
-  String ingresosTotales = '\$5,509'; // También podrías hacerlo dinámico
+  String ingresosTotales = '\$0.00';
+
+  // Datos dinámicos para la gráfica
+  List<FlSpot> spotsBlue = [];
+  List<FlSpot> spotsOrange = [];
+
+  // Mapas para guardar datos para las etiquetas (ventas e ingresos por día)
+  Map<int, int> ventasPorDia = {};
+  Map<int, double> ingresosPorDia = {};
 
   @override
   void initState() {
@@ -31,21 +40,70 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> cargarDatosResumen() async {
     try {
-      // Obtener todas las rutas
+      final ventas = await VentasService.getAllventas();
       final rutas = await RouteService.getAllRoutes();
-      // Obtener todos los conductores
       final drivers = await DriverService.getAllDrivers();
 
-      print("Rutas obtenidas: ${rutas.length}");
-      print("Conductores obtenidos: ${drivers.length}");
+      // Calcular total de ingresos
+      double totalIngresos = ventas.fold(0.0, (suma, venta) {
+        final amountField = venta['amount'];
+        final amount = amountField is num
+            ? amountField.toDouble()
+            : double.tryParse(amountField.toString()) ?? 0.0;
+        return suma + amount;
+      });
+
+      // Inicializar conteo por día
+      ventasPorDia = {for (var i = 0; i < 7; i++) i: 0};
+      ingresosPorDia = {for (var i = 0; i < 7; i++) i: 0.0};
+
+      for (var venta in ventas) {
+        if (venta['created_at'] != null) {
+          DateTime fecha;
+          try {
+            fecha = DateTime.parse(venta['created_at'].toString());
+          } catch (_) {
+            continue;
+          }
+          int diaSemana = fecha.weekday - 1; // 0=Lun ... 6=Dom
+          if (ventasPorDia.containsKey(diaSemana)) {
+            ventasPorDia[diaSemana] = ventasPorDia[diaSemana]! + 1;
+            final amountField = venta['amount'];
+            final amount = amountField is num
+                ? amountField.toDouble()
+                : double.tryParse(amountField.toString()) ?? 0.0;
+            ingresosPorDia[diaSemana] = ingresosPorDia[diaSemana]! + amount;
+          }
+        }
+      }
+
+      // Generar FlSpot para la línea azul (ventas diarias)
+      List<FlSpot> line1 = [];
+      for (int i = 0; i < 7; i++) {
+        line1.add(FlSpot(i.toDouble(), ventasPorDia[i]?.toDouble() ?? 0));
+      }
+
+      // Línea naranja con datos simulados (puedes adaptar o remover)
+      List<FlSpot> line2 = [
+        FlSpot(0, 80),
+        FlSpot(1, 100),
+        FlSpot(2, 120),
+        FlSpot(3, 150),
+        FlSpot(4, 130),
+        FlSpot(5, 160),
+        FlSpot(6, 140),
+      ];
 
       setState(() {
+        ventasTotales = ventas.length.toString();
+        ingresosTotales = '\$${totalIngresos.toStringAsFixed(2)}';
         rutasActivas = rutas.length.toString();
         conductores = drivers.length.toString();
+        spotsBlue = line1;
+        spotsOrange = line2;
       });
     } catch (e) {
       print('Error cargando datos resumen: $e');
-      // Mantener valores por defecto en UI
     }
   }
 
@@ -76,17 +134,11 @@ class _HomePageState extends State<HomePage> {
                   final data = snapshot.data!;
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 8),
-                        WeatherCard(
-                          temperature: data['temp'],
-                          description: data['description'],
-                          iconCode: data['icon'],
-                          city: data['city'],
-                        ),
-                      ],
+                    child: WeatherCard(
+                      temperature: data['temp'],
+                      description: data['description'],
+                      iconCode: data['icon'],
+                      city: data['city'],
                     ),
                   );
                 }
@@ -95,7 +147,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(height: 20),
             ResumenCards(
               rutasActivas: rutasActivas,
-              viajesHoy: viajesHoy,
+              ventasTotales: ventasTotales,
               conductores: conductores,
               ingresosTotales: ingresosTotales,
             ),
@@ -105,25 +157,7 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.add),
-                    label: const Text("Nuevo viaje"),
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.deepOrangeAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 14,
-                        horizontal: 20,
-                      ),
-                      textStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
+  
                   OutlinedButton.icon(
                     icon: const Icon(Icons.file_download),
                     label: const Text("Exportar"),
@@ -155,130 +189,135 @@ class _HomePageState extends State<HomePage> {
                     title: 'Estadísticas de Viajes',
                     content: SizedBox(
                       height: 220,
-                      child: LineChart(
-                        LineChartData(
-                          minX: 0,
-                          maxX: 6,
-                          minY: 0,
-                          maxY: 450,
-                          gridData: FlGridData(
-                            show: true,
-                            horizontalInterval: 100,
-                          ),
-                          titlesData: FlTitlesData(
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                interval: 1,
-                                getTitlesWidget: (value, meta) {
-                                  const days = [
-                                    'Lun',
-                                    'Mar',
-                                    'Mié',
-                                    'Jue',
-                                    'Vie',
-                                    'Sáb',
-                                    'Dom',
-                                  ];
-                                  if (value.toInt() < 0 || value.toInt() > 6)
-                                    return const SizedBox.shrink();
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8),
-                                    child: Text(
-                                      days[value.toInt()],
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                      child: spotsBlue.isEmpty
+                          ? const Center(child: CircularProgressIndicator())
+                          : LineChart(
+                              LineChartData(
+                                minX: 0,
+                                maxX: 6,
+                                minY: 0,
+                                maxY: (spotsBlue
+                                            .map((s) => s.y)
+                                            .reduce((a, b) => a > b ? a : b) +
+                                        10)
+                                    .ceilToDouble(),
+                                gridData: FlGridData(
+                                  show: true,
+                                  horizontalInterval: 10,
+                                ),
+                                titlesData: FlTitlesData(
+                                  bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      interval: 1,
+                                      getTitlesWidget: (value, meta) {
+                                        const days = [
+                                          'Lun',
+                                          'Mar',
+                                          'Mié',
+                                          'Jue',
+                                          'Vie',
+                                          'Sáb',
+                                          'Dom',
+                                        ];
+                                        if (value.toInt() < 0 ||
+                                            value.toInt() > 6) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Padding(
+                                          padding: const EdgeInsets.only(top: 8),
+                                          child: Text(
+                                            days[value.toInt()],
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.black87,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        );
+                                      },
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                interval: 100,
-                                reservedSize: 42,
-                                getTitlesWidget: (value, meta) {
-                                  return Text(
-                                    value.toInt().toString(),
-                                    style: const TextStyle(
-                                      color: Colors.black54,
+                                  ),
+                                  leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                      showTitles: true,
+                                      interval: 20,
+                                      reservedSize: 42,
+                                      getTitlesWidget: (value, meta) {
+                                        return Text(
+                                          value.toInt().toString(),
+                                          style: const TextStyle(
+                                            color: Colors.black54,
+                                          ),
+                                        );
+                                      },
                                     ),
-                                  );
-                                },
-                              ),
-                            ),
-                            topTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                            rightTitles: AxisTitles(
-                              sideTitles: SideTitles(showTitles: false),
-                            ),
-                          ),
-                          borderData: FlBorderData(
-                            show: true,
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: const [
-                                FlSpot(0, 100),
-                                FlSpot(1, 150),
-                                FlSpot(2, 200),
-                                FlSpot(3, 300),
-                                FlSpot(4, 250),
-                                FlSpot(5, 400),
-                                FlSpot(6, 350),
-                              ],
-                              isCurved: true,
-                              gradient: const LinearGradient(
-                                colors: [Colors.blue, Colors.lightBlueAccent],
-                              ),
-                              barWidth: 4,
-                              dotData: FlDotData(show: true),
-                            ),
-                            LineChartBarData(
-                              spots: const [
-                                FlSpot(0, 80),
-                                FlSpot(1, 100),
-                                FlSpot(2, 120),
-                                FlSpot(3, 150),
-                                FlSpot(4, 130),
-                                FlSpot(5, 160),
-                                FlSpot(6, 140),
-                              ],
-                              isCurved: true,
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Colors.orange,
-                                  Colors.deepOrangeAccent,
+                                  ),
+                                  topTitles: AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                  rightTitles: AxisTitles(
+                                    sideTitles: SideTitles(showTitles: false),
+                                  ),
+                                ),
+                                borderData: FlBorderData(
+                                  show: true,
+                                  border: Border.all(color: Colors.grey.shade300),
+                                ),
+                                lineBarsData: [
+                                  LineChartBarData(
+                                    spots: spotsBlue,
+                                    isCurved: true,
+                                    gradient: const LinearGradient(
+                                      colors: [Colors.blue, Colors.lightBlueAccent],
+                                    ),
+                                    barWidth: 4,
+                                    dotData: FlDotData(
+                                      show: true,
+                                      getDotPainter: (spot, percent, barData, index) {
+                                        return _DotWithLabelPainter(
+                                          ventas: ventasPorDia[spot.x.toInt()] ?? 0,
+                                          ingresos:
+                                              ingresosPorDia[spot.x.toInt()] ?? 0.0,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                 
                                 ],
+                                lineTouchData: LineTouchData(
+                                  touchTooltipData: LineTouchTooltipData(
+                                    tooltipBgColor: Colors.black87,
+                                    getTooltipItems: (touchedSpots) {
+                                      return touchedSpots.map((spot) {
+                                        if (spot.barIndex == 0) {
+                                          final dia = spot.x.toInt();
+                                          final ventasTooltip =
+                                              ventasPorDia[dia] ?? 0;
+                                          final ingresosTooltip =
+                                              ingresosPorDia[dia] ?? 0.0;
+                                          return LineTooltipItem(
+                                            'Ventas: $ventasTooltip\nIngresos: \$${ingresosTooltip.toStringAsFixed(2)}',
+                                            const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          );
+                                        } else {
+                                          return LineTooltipItem(
+                                            '${spot.y.toInt()}',
+                                            const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          );
+                                        }
+                                      }).toList();
+                                    },
+                                  ),
+                                ),
                               ),
-                              barWidth: 4,
-                              dotData: FlDotData(show: true),
                             ),
-                          ],
-                          lineTouchData: LineTouchData(
-                            touchTooltipData: LineTouchTooltipData(
-                              tooltipBgColor: Colors.black87,
-                              getTooltipItems: (touchedSpots) {
-                                return touchedSpots.map((spot) {
-                                  return LineTooltipItem(
-                                    '${spot.y.toInt()} viajes',
-                                    const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  );
-                                }).toList();
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -370,13 +409,183 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  Future<void> exportarPDF(BuildContext context) async {
+    final pdf = pw.Document();
+
+    // Definir estilos
+    final titleStyle = pw.TextStyle(
+      fontSize: 24,
+      fontWeight: pw.FontWeight.bold,
+      color: pw.PdfColor.fromHex('#000000'),
+    );
+    final subtitleStyle = pw.TextStyle(
+      fontSize: 18,
+      fontWeight: pw.FontWeight.bold,
+      color: pw.PdfColor.fromHex('#333333'),
+    );
+    final textStyle = pw.TextStyle(
+      fontSize: 14,
+      color: pw.PdfColor.fromHex('#000000'),
+    );
+
+    // Obtener datos recientes de ventas para los viajes
+    final ventas = await VentasService.getAllventas();
+    List<pw.Widget> recentTrips = [];
+    for (var venta in ventas.take(4)) {
+      final origin = venta['origin']?.toString() ?? 'Desconocido';
+      final destination = venta['destination']?.toString() ?? 'Desconocido';
+      final amountField = venta['amount'];
+      final amount = amountField is num
+          ? amountField.toDouble()
+          : double.tryParse(amountField.toString()) ?? 0.0;
+      recentTrips.add(
+        pw.Bullet(
+          text: '$origin → $destination - \$${amount.toStringAsFixed(2)}',
+          style: textStyle,
+        ),
+      );
+    }
+
+    // Crear tabla para estadísticas semanales
+    final days = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    List<pw.TableRow> tableRows = [];
+    for (int i = 0; i < 7; i++) {
+      tableRows.add(
+        pw.TableRow(
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text(days[i], style: textStyle),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text((ventasPorDia[i] ?? 0).toString(), style: textStyle),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(8),
+              child: pw.Text('\$${(ingresosPorDia[i] ?? 0.0).toStringAsFixed(2)}', style: textStyle),
+            ),
+          ],
+        ),
+      );
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: pw.PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) => [
+          pw.Text('Reporte de Viajes', style: titleStyle),
+          pw.SizedBox(height: 20),
+          pw.Text('Resumen General', style: subtitleStyle),
+          pw.SizedBox(height: 10),
+          pw.Text('Rutas Activas: $rutasActivas', style: textStyle),
+          pw.Text('Ventas Totales: $ventasTotales', style: textStyle),
+          pw.Text('Conductores: $conductores', style: textStyle),
+          pw.Text('Ingresos Totales: $ingresosTotales', style: textStyle),
+          pw.SizedBox(height: 20),
+          pw.Text('Estadísticas Semanales', style: subtitleStyle),
+          pw.SizedBox(height: 10),
+          pw.Table(
+            border: pw.TableBorder.all(),
+            children: [
+              pw.TableRow(
+                children: [
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text('Día', style: subtitleStyle),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text('Ventas', style: subtitleStyle),
+                  ),
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.all(8),
+                    child: pw.Text('Ingresos', style: subtitleStyle),
+                  ),
+                ],
+              ),
+              ...tableRows,
+            ],
+          ),
+          pw.SizedBox(height: 20),
+          pw.Text('Viajes Recientes', style: subtitleStyle),
+          pw.SizedBox(height: 10),
+          ...recentTrips,
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (format) async => pdf.save(),
+    );
+  }
 }
 
-// El resto de widgets como WeatherCard, exportarPDF, CustomCard, RecentTrip permanecen igual
+class _DotWithLabelPainter extends FlDotPainter {
+  final int ventas;
+  final double ingresos;
 
+  _DotWithLabelPainter({
+    required this.ventas,
+    required this.ingresos,
+  });
 
-// ------------------- Widgets personalizados -------------------
+  @override
+  void draw(Canvas canvas, FlSpot spot, Offset offsetInCanvas) {
+    final paint = Paint()..color = Colors.blue;
 
+    canvas.drawCircle(offsetInCanvas, 6, paint);
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: '$ventas\n\$${ingresos.toStringAsFixed(0)}',
+        style: const TextStyle(
+          color: Colors.black87,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+    textPainter.layout();
+
+    final offsetTexto = Offset(
+      offsetInCanvas.dx - textPainter.width / 2,
+      offsetInCanvas.dy - 6 - textPainter.height - 4,
+    );
+
+    textPainter.paint(canvas, offsetTexto);
+  }
+
+  @override
+  Size getSize(FlSpot spot) {
+    return const Size(40, 40);
+  }
+
+  @override
+  List<Object?> get props => [ventas, ingresos];
+}
+
+class VentasService {
+  static Future<List<Map<String, dynamic>>> getAllventas() async {
+    final result = await MongoDatabase.ventasCollection.find().toList();
+
+    for (var venta in result) {
+      if (venta['data'] is String) {
+        try {
+          venta['data'] = json.decode(venta['data']);
+        } catch (e) {
+          venta['data'] = {};
+        }
+      }
+    }
+
+    return result.cast<Map<String, dynamic>>();
+  }
+}
 
 class WeatherCard extends StatelessWidget {
   final String temperature;
@@ -400,15 +609,12 @@ class WeatherCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Icono
             Image.network(
               'https://openweathermap.org/img/wn/$iconCode@2x.png',
               width: 40,
               height: 40,
             ),
             const SizedBox(width: 8),
-
-            // Ciudad al lado del icono
             if (city != null)
               Text(
                 city!,
@@ -417,10 +623,7 @@ class WeatherCard extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
             const SizedBox(width: 12),
-
-            // Temperatura y descripción en columna, pero sin mucho espacio vertical
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -546,38 +749,4 @@ Future<Map<String, dynamic>> fetchWeather() async {
   } else {
     throw Exception('Error al obtener el clima: ${response.statusCode}');
   }
-}
-
-Future<void> exportarPDF(BuildContext context) async {
-  final pdf = pw.Document();
-
-  pdf.addPage(
-    pw.Page(
-      build: (pw.Context context) => pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(
-            'Reporte de Viajes',
-            style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
-          ),
-          pw.SizedBox(height: 20),
-          pw.Text('Viajes de hoy: 24'),
-          pw.Text('Pasajeros este mes: 500'),
-          pw.Text('Rutas activas: 10'),
-          pw.Text('Ingresos totales: \$5,509'),
-          pw.SizedBox(height: 20),
-          pw.Text(
-            'Viajes recientes:',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          ),
-          pw.Bullet(text: 'Centro → Aeropuerto - \$40.00'),
-          pw.Bullet(text: 'Parque Norte → Playa - \$32.50'),
-          pw.Bullet(text: 'Estación Central → Avenida 5 - \$46.00'),
-          pw.Bullet(text: 'Colonia Este → Centro - \$38.75'),
-        ],
-      ),
-    ),
-  );
-
-  await Printing.layoutPdf(onLayout: (format) async => pdf.save());
 }

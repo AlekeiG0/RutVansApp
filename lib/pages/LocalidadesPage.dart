@@ -57,149 +57,140 @@ class _LocalitiesPageState extends State<LocalitiesPage> {
     return null;
   }
 
-  Future<void> _showAddLocalityDialog(LatLng position) async {
-    final _formKey = GlobalKey<FormState>();
+Future<void> _showAddLocalityDialog(LatLng position) async {
+  final _formKey = GlobalKey<FormState>();
 
-    String latitude = position.latitude.toString();
-    String longitude = position.longitude.toString();
-    String locality = '';
-    String municipality = '';
-    String street = '';
-    String postalCode = '';
-    String state = '';
-    String country = '';
-    String localityType = '';
+  String latitude = position.latitude.toString();
+  String longitude = position.longitude.toString();
+  String locality = '';
+  String municipality = '';
+  String street = '';
+  String postalCode = '';
+  String state = '';
+  String country = '';
+  String localityType = '';
 
-    final address = await reverseGeocode(position);
-    if (address != null) {
-      locality = address['neighbourhood'] ??
-          address['suburb'] ??
-          address['city_district'] ??
-          address['city'] ??
-          '';
-      municipality = address['county'] ?? '';
-      street = address['road'] ?? '';
-      postalCode = address['postcode'] ?? '';
-      state = address['state'] ?? '';
-      country = address['country'] ?? '';
-      localityType = address['type'] ?? '';
-    }
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text(
-            'Agregar nueva localidad',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-          ),
-          content: Form(
-            key: _formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildReadOnlyField('Latitud', latitude),
-                  const SizedBox(height: 8),
-                  _buildReadOnlyField('Longitud', longitude),
-                  const SizedBox(height: 8),
-                  _buildEditableField(
-                    label: 'Localidad',
-                    initialValue: locality,
-                    validatorMsg: 'La localidad es requerida',
-                    onChanged: (v) => locality = v,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildEditableField(
-                    label: 'Municipio',
-                    initialValue: municipality,
-                    validatorMsg: 'El municipio es requerido',
-                    onChanged: (v) => municipality = v,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildEditableField(
-                    label: 'Calle',
-                    initialValue: street,
-                    onChanged: (v) => street = v,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildEditableField(
-                    label: 'Código Postal',
-                    initialValue: postalCode,
-                    onChanged: (v) => postalCode = v,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildReadOnlyField('Estado', state),
-                  const SizedBox(height: 8),
-                  _buildReadOnlyField('País', country),
-                  const SizedBox(height: 8),
-                  _buildReadOnlyField('Tipo de localidad', localityType),
-                ],
-              ),
-            ),
-          ),
-          actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text(
-                'Cancelar',
-                style: TextStyle(fontSize: 16),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              onPressed: () async {
-                if (_formKey.currentState!.validate()) {
-                  try {
-                    final nowStr = DateTime.now()
-                        .toIso8601String()
-                        .substring(0, 19)
-                        .replaceAll('T', ' ');
-
-                    final newId = (_localities.isNotEmpty)
-                        ? (_localities
-                                .map((e) => e['id'] as int)
-                                .reduce((a, b) => a > b ? a : b) +
-                            1)
-                        : 1;
-
-                    await LocalityService.addLocality({
-                      'id': newId,
-                      'longitude': longitude,
-                      'latitude': latitude,
-                      'locality': locality,
-                      'street': street,
-                      'postal_code': postalCode,
-                      'municipality': municipality,
-                      'state': state,
-                      'country': country,
-                      'locality_type': localityType,
-                      'created_at': nowStr,
-                      'updated_at': nowStr,
-                    });
-
-                    Navigator.of(context).pop();
-                    _fetchLocalities();
-                  } catch (e) {
-                    print('Error guardando localidad: $e');
-                  }
-                }
-              },
-              child: const Text('Guardar', style: TextStyle(fontSize: 16)),
-            ),
-          ],
-        );
-      },
-    );
+  final address = await reverseGeocode(position);
+  if (address != null) {
+    locality = address['neighbourhood'] ??
+        address['suburb'] ??
+        address['city_district'] ??
+        address['city'] ??
+        '';
+    municipality = address['county'] ?? '';
+    street = address['road'] ?? '';
+    postalCode = address['postcode'] ?? '';
+    state = address['state'] ?? '';
+    country = address['country'] ?? '';
+    localityType = address['type'] ?? '';
   }
+
+  await showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Agregar nueva localidad',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+        ),
+        content: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Solo campos importantes
+                _buildEditableField(
+                  label: 'Localidad',
+                  initialValue: locality,
+                  validatorMsg: 'La localidad es requerida',
+                  onChanged: (v) => locality = v,
+                ),
+                const SizedBox(height: 8),
+                _buildEditableField(
+                  label: 'Municipio',
+                  initialValue: municipality,
+                  validatorMsg: 'El municipio es requerido',
+                  onChanged: (v) => municipality = v,
+                ),
+                const SizedBox(height: 8),
+                _buildEditableField(
+                  label: 'Calle',
+                  initialValue: street,
+                  onChanged: (v) => street = v,
+                ),
+                const SizedBox(height: 8),
+                _buildEditableField(
+                  label: 'Código Postal',
+                  initialValue: postalCode,
+                  onChanged: (v) => postalCode = v,
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            onPressed: () async {
+              if (_formKey.currentState!.validate()) {
+                try {
+                  final nowStr = DateTime.now()
+                      .toIso8601String()
+                      .substring(0, 19)
+                      .replaceAll('T', ' ');
+
+                  final newId = (_localities.isNotEmpty)
+                      ? (_localities
+                              .map((e) => e['id'] as int)
+                              .reduce((a, b) => a > b ? a : b) +
+                          1)
+                      : 1;
+
+                  // Guardar TODOS los campos, no solo los visibles
+                  await LocalityService.addLocality({
+                    'id': newId,
+                    'longitude': longitude,
+                    'latitude': latitude,
+                    'locality': locality,
+                    'street': street,
+                    'postal_code': postalCode,
+                    'municipality': municipality,
+                    'state': state,
+                    'country': country,
+                    'locality_type': localityType,
+                    'created_at': nowStr,
+                    'updated_at': nowStr,
+                  });
+
+                  Navigator.of(context).pop();
+                  _fetchLocalities();
+                } catch (e) {
+                  print('Error guardando localidad: $e');
+                }
+              }
+            },
+            child: const Text('Guardar', style: TextStyle(fontSize: 16)),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 
   Widget _buildReadOnlyField(String label, String value) {
     return TextFormField(

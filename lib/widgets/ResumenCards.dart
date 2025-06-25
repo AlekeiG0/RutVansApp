@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
-// importa tu InfoCard si está separada
 
 class ResumenCards extends StatelessWidget {
   final String rutasActivas;
-  final String viajesHoy;
+  final String ventasTotales;
   final String conductores;
   final String ingresosTotales;
 
   const ResumenCards({
     super.key,
     required this.rutasActivas,
-    required this.viajesHoy,
+    required this.ventasTotales,
     required this.conductores,
     required this.ingresosTotales,
   });
@@ -22,18 +21,18 @@ class ResumenCards extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Flexible(
+          Expanded(
             child: InfoCard(
               icon: Icons.directions_bus,
-              value: viajesHoy,
-              label: 'Viajes de hoy',
+              value: ventasTotales,
+              label: 'Ventas ',
               backgroundColor: const Color(0xFFD0F2FF),
               iconColor: const Color(0xFF1E88E5),
               compact: true,
             ),
           ),
           const SizedBox(width: 8),
-          Flexible(
+          Expanded(
             child: InfoCard(
               icon: Icons.people,
               value: conductores,
@@ -44,7 +43,7 @@ class ResumenCards extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Flexible(
+          Expanded(
             child: InfoCard(
               icon: Icons.location_on,
               value: rutasActivas,
@@ -55,7 +54,7 @@ class ResumenCards extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Flexible(
+          Expanded(
             child: InfoCard(
               icon: Icons.attach_money,
               value: ingresosTotales,
@@ -70,6 +69,7 @@ class ResumenCards extends StatelessWidget {
     );
   }
 }
+
 class InfoCard extends StatelessWidget {
   final IconData icon;
   final String value;
@@ -109,20 +109,22 @@ class InfoCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: backgroundColor,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
               color: Colors.black12,
               blurRadius: 8,
-              offset: const Offset(0, 4),
+              offset: Offset(0, 4),
             ),
           ],
         ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: iconColor, size: iconSize),
             SizedBox(height: compact ? 6 : 8),
             Text(
               value,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: valueFontSize,
@@ -132,6 +134,7 @@ class InfoCard extends StatelessWidget {
             SizedBox(height: compact ? 4 : 6),
             Text(
               label,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: labelFontSize,
                 color: Colors.black54,

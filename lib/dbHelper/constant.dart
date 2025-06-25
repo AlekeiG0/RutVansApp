@@ -3,3 +3,4 @@ const USER_COLLECTION = "user";
 const ROUTE_COLLECTION = "route";
 const LOCALITY_COLLECTION = "localities";
 const DRIVER_COLLECTION = "drivers";
+const VENTAS_COLLECTION = "sales";
