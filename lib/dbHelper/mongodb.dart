@@ -8,7 +8,7 @@ class MongoDatabase {
   static late DbCollection routeCollection;
   static late DbCollection driverCollection;
   static late DbCollection ventasCollection;
-
+  static late DbCollection driverUnitCollection;
   static Future<void> connect() async {
     db = await Db.create(MONGO_CONN_URL);
     await db.open();
@@ -16,7 +16,8 @@ class MongoDatabase {
     localityCollection = db.collection('localities');
     routeCollection = db.collection('route');
     driverCollection = db.collection('drivers');
-    ventasCollection = db.collection("sales"); // Asegúrate que el nombre es correcto
+    ventasCollection = db.collection('sales');
+    driverUnitCollection = db.collection(DRIVER_UNIT_COLLECTION);
 
     print("✅ Conexión a MongoDB exitosa");
   }

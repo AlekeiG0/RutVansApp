@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mongo_dart/mongo_dart.dart' as mongo;
 import 'package:logger/logger.dart';
+import '../widgets/app_scaffold.dart';
 
 class GestionPasajerosPage extends StatefulWidget {
   const GestionPasajerosPage({super.key});
@@ -378,136 +379,119 @@ await _db.open();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Aplicar filtro de búsqueda
-    final filtrados = pasajeros.where((p) {
-      final nombreLower = p['nombre'].toString().toLowerCase();
-      final destinoLower = p['destino'].toString().toLowerCase();
-      return nombreLower.contains(_busqueda) || destinoLower.contains(_busqueda);
-    }).toList();
+@override
+Widget build(BuildContext context) {
+  final filtrados = pasajeros.where((p) {
+    final nombreLower = p['nombre'].toString().toLowerCase();
+    final destinoLower = p['destino'].toString().toLowerCase();
+    return nombreLower.contains(_busqueda) || destinoLower.contains(_busqueda);
+  }).toList();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.orange,
-        title: const Text('Gestión de Pasajeros',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        centerTitle: true,
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.orange,
-        onPressed: () => _showFormDialog(),
-        child: const Icon(Icons.add),
-      ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
-            child: filtrados.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No se encontraron pasajeros.',
-                      style: TextStyle(fontSize: 18, color: Colors.grey),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filtrados.length,
-                    itemBuilder: (context, index) {
-                      final pasajero = filtrados[index];
-                      return GestureDetector(
-                        onTap: () => _showPasajeroDetalle(pasajeros.indexOf(pasajero)),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.orange.withOpacity(0.08),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(30),
-                                child: _buildImage(pasajero['foto']),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(pasajero['nombre'],
-                                        style: const TextStyle(
-                                            fontSize: 16, fontWeight: FontWeight.bold)),
-                                    Text('Destino: ${pasajero['destino']}'),
-                                  ],
-                                ),
-                              ),
-                              Column(
+  return AppScaffold(
+    currentIndex: 0,
+    currentDrawerIndex: 5,
+    floatingActionButton: FloatingActionButton(
+      backgroundColor: Colors.orange,
+      onPressed: () => _showFormDialog(),
+      child: const Icon(Icons.add),
+    ),
+    body: Column(
+      children: [
+        _buildSearchBar(),
+        Expanded(
+          child: filtrados.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No se encontraron pasajeros.',
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filtrados.length,
+                  itemBuilder: (context, index) {
+                    final pasajero = filtrados[index];
+                    return GestureDetector(
+                      onTap: () => _showPasajeroDetalle(pasajeros.indexOf(pasajero)),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withOpacity(0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(30),
+                              child: _buildImage(pasajero['foto']),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('\$${pasajero['precio'].toStringAsFixed(2)}',
+                                  Text(pasajero['nombre'],
                                       style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.green)),
-                                  Row(
-                                    children: [
-                                      IconButton(
-                                        icon: Icon(
-                                          pasajero['favorito']
-                                              ? Icons.favorite
-                                              : Icons.favorite_border,
-                                          color:
-                                              pasajero['favorito'] ? Colors.red : Colors.grey,
-                                        ),
-                                        onPressed: () async {
-                                          pasajero['favorito'] = !pasajero['favorito'];
-                                          await _editarPasajero(pasajero);
-                                        },
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, color: Colors.blue),
-                                        onPressed: () => _editPasajero(pasajeros.indexOf(pasajero)),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete, color: Colors.red),
-                                        onPressed: () =>
-                                            _deletePasajero(pasajeros.indexOf(pasajero)),
-                                      ),
-                                    ],
-                                  ),
+                                          fontSize: 16, fontWeight: FontWeight.bold)),
+                                  Text('Destino: ${pasajero['destino']}'),
                                 ],
                               ),
-                            ],
-                          ),
+                            ),
+                            Column(
+                              children: [
+                                Text('\$${pasajero['precio'].toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green)),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        pasajero['favorito']
+                                            ? Icons.favorite
+                                            : Icons.favorite_border,
+                                        color: pasajero['favorito'] ? Colors.red : Colors.grey,
+                                      ),
+                                      onPressed: () async {
+                                        pasajero['favorito'] = !pasajero['favorito'];
+                                        await _editarPasajero(pasajero);
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.blue),
+                                      onPressed: () =>
+                                          _editPasajero(pasajeros.indexOf(pasajero)),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      onPressed: () =>
+                                          _deletePasajero(pasajeros.indexOf(pasajero)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 3,
-        selectedItemColor: Colors.orange,
-        unselectedItemColor: Colors.black54,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Rutas'),
-          BottomNavigationBarItem(icon: Icon(Icons.attach_money), label: 'Finanza'),
-          BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Usuarios'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Ajustes'),
-        ],
-      ),
-    );
-  }
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    ),
+  );
+}
+
 
   Widget _buildSearchBar() {
     return Padding(

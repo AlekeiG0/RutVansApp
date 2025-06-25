@@ -23,6 +23,9 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
   double promedio = 0;
   int transacciones = 0;
 
+  int mesSeleccionado = DateTime.now().month;
+  int anioSeleccionado = DateTime.now().year;
+
   List<Map<String, dynamic>> balanceHistorico = [];
   List<Map<String, dynamic>> topRutas = [];
 
@@ -30,8 +33,20 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
   void initState() {
     super.initState();
     final hoy = DateTime.now();
-    filtroHasta = hoy;
-    filtroDesde = hoy.subtract(const Duration(days: 30));
+    _calcularFechas(hoy.year, hoy.month);
+  }
+
+  void _calcularFechas(int anio, int mes) {
+    final desde = DateTime(anio, mes - 1, 16);
+    final hasta = DateTime(anio, mes, 15);
+
+    setState(() {
+      mesSeleccionado = mes;
+      anioSeleccionado = anio;
+      filtroDesde = desde;
+      filtroHasta = hasta;
+    });
+
     cargarDatos();
   }
 
@@ -67,27 +82,6 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
     setState(() => cargando = false);
   }
 
-  Future<void> seleccionarFecha(BuildContext context, bool esDesde) async {
-    final inicial = esDesde ? filtroDesde! : filtroHasta!;
-    final fecha = await showDatePicker(
-      context: context,
-      initialDate: inicial,
-      firstDate: DateTime(2023, 1, 1),
-      lastDate: DateTime.now(),
-    );
-
-    if (fecha != null) {
-      setState(() {
-        if (esDesde) {
-          filtroDesde = fecha;
-        } else {
-          filtroHasta = fecha;
-        }
-      });
-      cargarDatos();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -101,7 +95,7 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
                 children: [
                   _buildTitle(),
                   const SizedBox(height: 20),
-                  _buildDateFilters(),
+                  _buildMonthSelector(),
                   const SizedBox(height: 20),
                   _buildResumenFinanciero(),
                   const SizedBox(height: 20),
@@ -115,59 +109,46 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
   }
 
   Widget _buildTitle() {
-    return const Text(
-      'Reporte General de Ventas',
-      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+    final periodo = filtroDesde != null && filtroHasta != null
+        ? '${mostrar.format(filtroDesde!)} - ${mostrar.format(filtroHasta!)}'
+        : '';
+    return Text(
+      'Reporte mensual de Ventas\n$periodo',
+      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
     );
   }
 
-  Widget _buildDateFilters() {
+  Widget _buildMonthSelector() {
     return Row(
       children: [
         Expanded(
-          child: GestureDetector(
-            onTap: () => seleccionarFecha(context, true),
-            child: _dateBox('Desde', filtroDesde),
+          child: DropdownButton<int>(
+            value: mesSeleccionado,
+            onChanged: (nuevoMes) {
+              if (nuevoMes != null) {
+                _calcularFechas(anioSeleccionado, nuevoMes);
+              }
+            },
+            isExpanded: true,
+            items: List.generate(12, (index) {
+              final mes = index + 1;
+              final nombreMes = DateFormat.MMMM('es_MX').format(DateTime(0, mes));
+              return DropdownMenuItem(
+                value: mes,
+                child: Text(nombreMes[0].toUpperCase() + nombreMes.substring(1)),
+              );
+            }),
           ),
         ),
         const SizedBox(width: 10),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => seleccionarFecha(context, false),
-            child: _dateBox('Hasta', filtroHasta),
-          ),
-        ),
         IconButton(
+          icon: const Icon(Icons.refresh),
           onPressed: () {
             final hoy = DateTime.now();
-            setState(() {
-              filtroHasta = hoy;
-              filtroDesde = hoy.subtract(const Duration(days: 30));
-            });
-            cargarDatos();
+            _calcularFechas(hoy.year, hoy.month);
           },
-          icon: const Icon(Icons.refresh),
-        )
+        ),
       ],
-    );
-  }
-
-  Widget _dateBox(String label, DateTime? value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.orange),
-      ),
-      child: Row(
-        children: [
-          Text(value != null ? mostrar.format(value) : label,
-              style: const TextStyle(color: Colors.black87)),
-          const Spacer(),
-          const Icon(Icons.calendar_today, size: 16, color: Colors.orange),
-        ],
-      ),
     );
   }
 
@@ -209,13 +190,43 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
       return const Text('No hay datos suficientes para mostrar el gráfico.');
     }
 
-    final spots = balanceHistorico.asMap().entries.map((entry) {
-      final index = entry.key;
-      final monto = (entry.value['balance'] as num?)?.toDouble() ?? 0.0;
-      return FlSpot(index.toDouble(), monto);
-    }).toList();
+    final semanas = List.generate(4, (_) => 0.0);
 
-    final maxY = spots.map((e) => e.y).fold(0.0, (a, b) => a > b ? a : b) * 1.2;
+    for (var dato in balanceHistorico) {
+      final fecha = DateTime.parse(dato['fecha']);
+      final monto = (dato['balance'] as num?)?.toDouble() ?? 0.0;
+      final dia = fecha.day;
+
+      if (dia >= 16 && dia <= 22) {
+        semanas[0] += monto;
+      } else if (dia >= 23 && dia <= 29) {
+        semanas[1] += monto;
+      } else if (dia >= 30 || dia <= 6) {
+        semanas[2] += monto;
+      } else if (dia >= 7 && dia <= 15) {
+        semanas[3] += monto;
+      }
+    }
+
+    final spots = List.generate(4, (i) => BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(
+              toY: semanas[i],
+              width: 20,
+              color: Colors.orange,
+              borderRadius: BorderRadius.circular(4),
+              backDrawRodData: BackgroundBarChartRodData(show: false),
+            ),
+          ],
+        ));
+
+    final mayor = semanas.reduce((a, b) => a > b ? a : b);
+    final menor = semanas.reduce((a, b) => a < b ? a : b);
+    final indexMayor = semanas.indexOf(mayor);
+    final indexMenor = semanas.indexOf(menor);
+
+    const etiquetas = ['16–22', '23–29', '30–6', '7–15'];
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -227,47 +238,58 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Ingresos por Día',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          const Text('Ingresos semanales del periodo 16–15',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          const Text(
+            'Se agrupan los ingresos en 4 bloques por semana. Esto facilita la comparación del rendimiento del mes.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
           const SizedBox(height: 16),
           SizedBox(
             height: 200,
-            child: LineChart(
-              LineChartData(
-                minX: 0,
-                maxX: (spots.length - 1).toDouble(),
-                minY: 0,
-                maxY: maxY,
-                gridData: FlGridData(show: false),
+            child: BarChart(
+              BarChartData(
+                barGroups: spots,
+                gridData: FlGridData(show: true),
                 borderData: FlBorderData(show: false),
-                titlesData: FlTitlesData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: Colors.orange,
-                    barWidth: 3,
-                    dotData: FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.orange.withOpacity(0.3),
-                          Colors.orange.withOpacity(0.1),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) => Text(etiquetas[value.toInt()],
+                          style: const TextStyle(fontSize: 11)),
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) => Text(
+                        '\$${value.toInt()}',
+                        style: const TextStyle(fontSize: 10),
                       ),
                     ),
-                  )
-                ],
+                  ),
+                ),
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '📈 Semana con más ingresos: ${etiquetas[indexMayor]} → \$${mayor.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 12, color: Colors.green),
+          ),
+          Text(
+            '📉 Semana más baja: ${etiquetas[indexMenor]} → \$${menor.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 12, color: Colors.red),
           ),
         ],
       ),
     );
   }
+
+
 
   Widget _buildTopRutas() {
     return Container(
@@ -283,32 +305,52 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
           const Text('Rutas más vendidas',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          ...topRutas.map((ruta) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(ruta['nombre'],
+          ...topRutas.map((ruta) {
+            final String nombre = ruta['nombre']?.toString().trim() ?? 'Sin nombre';
+            final double monto = double.tryParse(
+                  ruta['monto'].toString().replaceAll(RegExp(r'[^\d.]'), ''),
+                ) ??
+                0.0;
+            final double porcentaje = (ruta['porcentaje'] as num?)?.toDouble() ?? 0.0;
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(nombre,
                             style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(ruta['monto'], style: const TextStyle(color: Colors.orange)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    LinearProgressIndicator(
-                      value: ruta['porcentaje'] ?? 0.0,
-                      backgroundColor: Colors.grey[200],
-                      color: Colors.orange,
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ],
-                ),
-              )),
+                      ),
+                      Text(
+                        '\$${monto.toStringAsFixed(2)}',
+                        style: const TextStyle(color: Colors.orange),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: porcentaje,
+                    backgroundColor: Colors.grey[200],
+                    color: Colors.orange,
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Representa ${(porcentaje * 100).toStringAsFixed(1)}% del total',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
   }
+
 }

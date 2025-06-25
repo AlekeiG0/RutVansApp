@@ -321,33 +321,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  const CustomCard(
-                    title: 'Viajes Recientes',
-                    content: Column(
-                      children: [
-                        RecentTrip(
-                          origin: 'Centro',
-                          destination: 'Aeropuerto',
-                          price: '\$40.00',
-                        ),
-                        RecentTrip(
-                          origin: 'Parque Norte',
-                          destination: 'Playa',
-                          price: '\$32.50',
-                        ),
-                        RecentTrip(
-                          origin: 'Estación Central',
-                          destination: 'Avenida 5',
-                          price: '\$46.00',
-                        ),
-                        RecentTrip(
-                          origin: 'Colonia Este',
-                          destination: 'Centro',
-                          price: '\$38.75',
-                        ),
-                      ],
-                    ),
-                  ),
+                 
                   const SizedBox(height: 28),
                   const CustomCard(
                     title: 'Alertas del sistema',

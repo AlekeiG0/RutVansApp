@@ -4,3 +4,4 @@ const ROUTE_COLLECTION = "route";
 const LOCALITY_COLLECTION = "localities";
 const DRIVER_COLLECTION = "drivers";
 const VENTAS_COLLECTION = "sales";
+const DRIVER_UNIT_COLLECTION = "driver_unit";

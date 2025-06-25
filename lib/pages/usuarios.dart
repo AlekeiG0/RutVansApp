@@ -1,14 +1,51 @@
 import 'package:flutter/material.dart';
+import '../dbHelper/horariost.dart';
+import '../widgets/App_Scaffold.dart'; // ← tu widget AppScaffold
 
-class UsuarioPage extends StatelessWidget {
-  const UsuarioPage({super.key});
+class UsuarioPage extends StatefulWidget {
+  final String email; // Recibe email para buscar perfil
+
+  const UsuarioPage({super.key, required this.email});
+
+  @override
+  State<UsuarioPage> createState() => _UsuarioPageState();
+}
+
+class _UsuarioPageState extends State<UsuarioPage> {
+  Map<String, dynamic>? usuario;
+  bool isLoading = true;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarUsuario();
+  }
+
+  Future<void> _cargarUsuario() async {
+    try {
+      final userData = await MongoDatabase.getUserByEmail(widget.email);
+      if (userData != null) {
+        setState(() {
+          usuario = userData;
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          error = "Usuario no encontrado";
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        error = "Error al cargar datos: $e";
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final String nombre = 'Admin';
-    final String correo = 'admin@rutvans.com';
-    final String rol = 'Administrador';
-
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -19,100 +56,118 @@ class UsuarioPage extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
-              Center(
-                child: Text(
-                  'Mi Perfil',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white.withOpacity(0.95),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Card de perfil
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
+          child: isLoading
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : error != null
+                  ? Center(
+                      child: Text(
+                        error!,
+                        style: const TextStyle(color: Colors.white, fontSize: 18),
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const CircleAvatar(
-                        radius: 45,
-                        backgroundColor: Color(0xFFFF8C42),
-                        child: Icon(Icons.person, size: 60, color: Colors.white),
-                      ),
-                      const SizedBox(height: 15),
-                      Text(
-                        nombre,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
+                    )
+                  : Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        Center(
+                          child: Text(
+                            'Mi Perfil',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white.withOpacity(0.95),
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        correo,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                      const SizedBox(height: 5),
-                      Chip(
-                        label: Text(
-                          rol,
-                          style: const TextStyle(color: Colors.white),
+                        const SizedBox(height: 20),
+                        // Card de perfil
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 15,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                CircleAvatar(
+                                  radius: 45,
+                                  backgroundColor: const Color(0xFFFF8C42),
+                                  backgroundImage: usuario!['photo'] != null
+                                      ? NetworkImage(usuario!['photo'])
+                                      : null,
+                                  child: usuario!['photo'] == null
+                                      ? const Icon(Icons.person, size: 60, color: Colors.white)
+                                      : null,
+                                ),
+                                const SizedBox(height: 15),
+                                Text(
+                                  usuario!['name'] ?? 'Sin nombre',
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 5),
+                                Text(
+                                  usuario!['email'] ?? '',
+                                  style: const TextStyle(color: Colors.grey),
+                                ),
+                                const SizedBox(height: 5),
+                                Chip(
+                                  label: Text(
+                                    usuario!['role'] ?? 'Usuario',
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                  backgroundColor: Colors.orange.shade700,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                        backgroundColor: Colors.orange.shade700,
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 30),
-              // Opciones
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    children: [
-                      _opcion(
-                        icon: Icons.edit,
-                        text: 'Editar Perfil',
-                        onTap: () {},
-                      ),
-                      _opcion(
-                        icon: Icons.lock,
-                        text: 'Cambiar Contraseña',
-                        onTap: () {},
-                      ),
-                      _opcion(
-                        icon: Icons.logout,
-                        text: 'Cerrar Sesión',
-                        color: const Color.fromARGB(255, 255, 108, 82),
-                        onTap: () {
-                          Navigator.popUntil(context, (route) => route.isFirst);
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+                        const SizedBox(height: 30),
+                        // Opciones
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              children: [
+                                _opcion(
+                                  icon: Icons.edit,
+                                  text: 'Editar Perfil',
+                                  onTap: () {
+                                    // Aquí función para editar perfil
+                                  },
+                                ),
+                                _opcion(
+                                  icon: Icons.lock,
+                                  text: 'Cambiar Contraseña',
+                                  onTap: () {
+                                    // Aquí función para cambiar contraseña
+                                  },
+                                ),
+                                _opcion(
+                                  icon: Icons.logout,
+                                  text: 'Cerrar Sesión',
+                                  color: const Color.fromARGB(255, 255, 108, 82),
+                                  onTap: () {
+                                    Navigator.popUntil(context, (route) => route.isFirst);
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
         ),
       ),
     );
@@ -132,11 +187,11 @@ class UsuarioPage extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.95),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
               color: Colors.black12,
               blurRadius: 8,
-              offset: const Offset(0, 5),
+              offset: Offset(0, 5),
             ),
           ],
         ),

@@ -13,13 +13,17 @@ import '../pages/Rutas.dart';
 
 class AppScaffold extends StatelessWidget {
   final Widget body;
+  
   final int currentIndex;
   final int currentDrawerIndex;
   final Widget? floatingActionButton;  // <-- Agregar este campo
+  final String? email; // 
 
   const AppScaffold({
     super.key,
     required this.body,
+    this.email,
+  
     this.currentIndex = 0,
     this.currentDrawerIndex = -1,
     this.floatingActionButton,   // <-- Agregar parámetro
@@ -76,12 +80,19 @@ class AppScaffold extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           GestureDetector(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const UsuarioPage()),
-              );
-            },
+           onTap: () {
+  if (email != null) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => UsuarioPage(email: email!)),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("No se encontró el email del usuario")),
+    );
+  }
+},
+
             child: const Icon(Icons.account_circle, color: Colors.white, size: 28),
           ),
           const SizedBox(width: 8),

@@ -108,6 +108,7 @@ class _DetalladoVentasPageState extends State<DetalladoVentasPage> {
     return AppScaffold(
       currentIndex: 0,
       body: Padding(
+        
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

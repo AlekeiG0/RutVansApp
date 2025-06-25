@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mongo_dart/mongo_dart.dart' as mongo;
 import 'package:url_launcher/url_launcher.dart';
 import 'DetalleConductorPage.dart';
-
+import '../widgets/app_scaffold.dart';
 class ListaConductoresPage extends StatefulWidget {
   const ListaConductoresPage({super.key});
 
@@ -82,137 +82,107 @@ await _db.open();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (_errorMessage.isNotEmpty) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Lista de conductores'),
-          backgroundColor: Colors.orange,
-        ),
-        body: Center(
-          child: Text(_errorMessage, style: const TextStyle(color: Colors.red)),
-        ),
-      );
-    }
+@override
+Widget build(BuildContext context) {
+  if (_loading) {
+    return const AppScaffold(
+      currentIndex: 2,
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F9F9),
-      appBar: AppBar(
-        backgroundColor: Colors.orange,
-        title: const Text(
-          'Lista de conductores',
-          style: TextStyle(color: Colors.white),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Image.asset(
-              'images/logo.png',
-              height: 30,
-            ),
-          )
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: conductores.isEmpty
-            ? const Center(child: Text('No hay conductores disponibles.'))
-            : GridView.builder(
-                itemCount: conductores.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.72,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemBuilder: (context, index) {
-                  final conductor = conductores[index];
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => DetalleConductorPage(conductor: conductor),
-                        ),
-                      );
-                    },
-                    child: Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.orange, width: 3),
-                              ),
-                              child: ClipOval(
-                                child: _buildImage(conductor['foto']),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              conductor['nombre'],
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 4),
-                            Text('Edad: ${conductor['edad']} años'),
-                            Text('Experiencia: ${conductor['experiencia']}'),
-                            Text('Tel: ${conductor['telefono']}'),
-                            const SizedBox(height: 6),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.orange,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              onPressed: () => _llamarConductor(conductor['telefono']),
-                              icon: const Icon(Icons.call, size: 18),
-                              label: const Text('Llamar'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 3,
-        selectedItemColor: Colors.orange,
-        unselectedItemColor: Colors.black54,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Rutas'),
-          BottomNavigationBarItem(icon: Icon(Icons.attach_money), label: 'Finanza'),
-          BottomNavigationBarItem(icon: Icon(Icons.group), label: 'Usuarios'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Ajustes'),
-        ],
+  if (_errorMessage.isNotEmpty) {
+    return AppScaffold(
+      currentIndex: 2,
+      body: Center(
+        child: Text(_errorMessage, style: const TextStyle(color: Colors.red)),
       ),
     );
   }
+
+  return AppScaffold(
+    currentIndex: 2,
+    body: Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: conductores.isEmpty
+          ? const Center(child: Text('No hay conductores disponibles.'))
+          : GridView.builder(
+              itemCount: conductores.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.72,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemBuilder: (context, index) {
+                final conductor = conductores[index];
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DetalleConductorPage(conductor: conductor),
+                      ),
+                    );
+                  },
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                 child: Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+  child: SingleChildScrollView(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.orange, width: 3),
+          ),
+          child: ClipOval(
+            child: _buildImage(conductor['foto']),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          conductor['nombre'],
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text('Edad: ${conductor['edad']} años'),
+        Text('Experiencia: ${conductor['experiencia']}'),
+        Text('Tel: ${conductor['telefono']}'),
+        const SizedBox(height: 6),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.orange,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: () => _llamarConductor(conductor['telefono']),
+          icon: const Icon(Icons.call, size: 18),
+          label: const Text('Llamar'),
+        ),
+      ],
+    ),
+  ),
+),
+
+                  ),
+                );
+              },
+            ),
+    ),
+  );
+}
+
 
   Widget _buildImage(String ruta) {
     if (kIsWeb) {
