@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../pages/home_page.dart';
-import '../pages/Gestion_Incidencias_Page.dart';
-import 'package:mobil_rutvans/dbHelper/mongodb.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
-Future<void> main() async {
+import 'login.dart';
+import 'pages/home_page.dart';
+
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await MongoDatabase.connect(); // Conectar a MongoDB
   runApp(const MyApp());
 }
 
@@ -15,231 +17,253 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (context) => IncidenciasProvider()),
-      ],
-      child: MaterialApp(
-        title: 'RutVans',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
-          useMaterial3: true,
-        ),
-        home: const MyHomePage(title: 'RutVans'),
-        debugShowCheckedModeBanner: false,
+    return MaterialApp(
+      title: 'RutVans',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
+        useMaterial3: true,
       ),
+      home: const SplashScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  bool _obscurePassword = true;
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+  bool _movedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    );
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    _controller.forward();
+
+    Future.delayed(const Duration(milliseconds: 500), () {
+      setState(() {
+        _movedIn = true;
+      });
+    });
+
+    _checkTokenAndValidate();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+Future<bool> _validateTokenWithAPI(String token) async {
+  try {
+    final response = await http.get(
+      Uri.parse('https://rutvans.com/api/validate-token'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    );
+
+    print('[API] Status code: ${response.statusCode}');
+    print('[API] Body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['valid'] == true;
+    }
+    return false;
+  } catch (e) {
+    print('[API] Error al validar token: $e');
+    return false;
+  }
+}
+
+
+  Future<void> _checkTokenAndValidate() async {
+    await Future.delayed(const Duration(seconds: 5));
+
+    // Verificar conexión a internet
+    var connectivityResult = await Connectivity().checkConnectivity();
+    bool hasConnection = connectivityResult == ConnectivityResult.mobile ||
+        connectivityResult == ConnectivityResult.wifi;
+
+    if (!hasConnection) {
+      if (!mounted) return;
+
+      final Color dialogColor = Colors.deepOrange;
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) {
+          return Dialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            elevation: 10,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: dialogColor.withOpacity(0.95),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off, size: 50, color: Colors.white),
+                  const SizedBox(height: 15),
+                  const Text(
+                    'Sin conexión',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'No se detectó conexión a Internet.\n\nPor favor, verifica tu red e intenta nuevamente.',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white70,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: dialogColor,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                      child: Text(
+                        'Reintentar',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      if (mounted) {
+        _checkTokenAndValidate();
+      }
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null) {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoginPage(title: 'RutVans'),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Validar token con la API
+    final isValidToken = await _validateTokenWithAPI(token);
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => isValidToken ? const HomePage() : const LoginPage(title: 'RutVans'),
+        ),
+      );
+    }
+
+    // Si el token no es válido, lo eliminamos
+    if (!isValidToken) {
+      await prefs.remove('token');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final double screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Container(
-            height: screenHeight * 0.55,
-            decoration: const BoxDecoration(
-              color: Colors.orange,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(40),
-                bottomRight: Radius.circular(40),
+    return Stack(
+      children: [
+        // Fondo negro para contraste
+        Container(color: Colors.black),
+
+        // Mitad izquierda animada desde fuera hasta la mitad izquierda exacta
+        AnimatedAlign(
+          duration: const Duration(seconds: 3),
+          curve: Curves.easeInOut,
+          alignment: _movedIn ? const Alignment(-1, 0) : const Alignment(-2, 0),
+          child: Container(
+            width: screenWidth / 2,
+            height: double.infinity,
+            color: const Color(0xFFFF6000), // gris oscuro
+          ),
+        ),
+
+        // Mitad derecha animada desde fuera hasta la mitad derecha exacta
+        AnimatedAlign(
+          duration: const Duration(seconds: 3),
+          curve: Curves.easeInOut,
+          alignment: _movedIn ? const Alignment(1, 0) : const Alignment(2, 0),
+          child: Container(
+            width: screenWidth / 2,
+            height: double.infinity,
+            color: const Color(0xFF454545), // naranja
+          ),
+        ),
+
+        // Logo y loader centrados con animación
+        Center(
+          child: FadeTransition(
+            opacity: _animation,
+            child: ScaleTransition(
+              scale: _animation,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 150,
+                    height: 150,
+                  ),
+                  const SizedBox(height: 30),
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ],
               ),
             ),
           ),
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 90),
-                Image.asset('images/logo.png', height: 170),
-                const SizedBox(height: 10),
-                const Text(
-                  'Bienvenido',
-                  style: TextStyle(fontSize: 30, color: Colors.white),
-                ),
-                const SizedBox(height: 1),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 25, vertical: 50),
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 30),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.email),
-                          SizedBox(width: 8),
-                          Text("Correo"),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: emailController,
-                        decoration: InputDecoration(
-                          hintText: 'Ingresa tu correo',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 15),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Row(
-                        children: [
-                          Icon(Icons.lock),
-                          SizedBox(width: 8),
-                          Text("Contraseña"),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          hintText: 'Ingresa tu contraseña',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 15),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 45,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          onPressed: () async {
-                            final email = emailController.text.trim();
-                            final password = passwordController.text.trim();
-
-                            // Validar campos no vacíos
-                            if (email.isEmpty || password.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Completa todos los campos'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                              return;
-                            }
-
-                            // Buscar usuario en MongoDB
-                            final user = await MongoDatabase.userCollection.findOne({
-                              'email': email,
-                              'password': password,
-                            });
-
-                            if (user != null) {
-                              // Usuario válido, navegar a HomePage
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const HomePage(),
-                                ),
-                              );
-                            } else {
-                              // Mostrar error
-                             ScaffoldMessenger.of(context).showSnackBar(
-  SnackBar(
-    content: const Row(
-      children: [
-        Icon(Icons.error_outline, color: Colors.white),
-        SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            'Los datos ingresados son incorrectos.\nVerifica tu correo y contraseña.',
-            style: TextStyle(color: Colors.white),
-          ),
         ),
       ],
-    ),
-    backgroundColor: Colors.redAccent,
-    behavior: SnackBarBehavior.floating,
-    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    duration: const Duration(seconds: 4),
-  ),
-);
-
-                            }
-                          },
-                          child: const Text(
-                            'Iniciar Sesión',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Center(
-                        child: GestureDetector(
-                          onTap: () {},
-                          child: const Text(
-                            '¿Olvidaste la contraseña?',
-                            style: TextStyle(
-                              decoration: TextDecoration.underline,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
