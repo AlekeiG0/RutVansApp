@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../services/driver_services.dart';  // Servicio de conductores
+import 'package:url_launcher/url_launcher.dart';
+import '../../services/driver_services.dart';
 import '../../widgets/app_scaffold.dart';
 import '../../widgets/camera.dart';
-import '../../services/site_service.dart';  // Servicio de sitios
+import '../../services/site_service.dart';
 
 class DriverDetailsPage extends StatefulWidget {
   final Map<String, dynamic> driver;
@@ -14,13 +16,12 @@ class DriverDetailsPage extends StatefulWidget {
 
   @override
   State<DriverDetailsPage> createState() => _DriverDetailsPageState();
-  
 }
 
 class _DriverDetailsPageState extends State<DriverDetailsPage> {
   final DriverService _service = DriverService();
 
-  // Paleta corporativa
+  // Corporate color palette
   final Color primaryColor = const Color(0xFF0A3D62);
   final Color secondaryColor = const Color(0xFF3C6382);
   final Color accentColor = const Color(0xFF78E08F);
@@ -29,6 +30,237 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
   File? _imageFile;
   final ImagePicker _picker = ImagePicker();
 
+  // Function to build information rows
+  Widget _buildInfoRow(IconData icon, String label, String? value, {bool isClickable = false, VoidCallback? onTap}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: InkWell(
+        onTap: isClickable ? onTap : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: isClickable ? Colors.grey.withOpacity(0.1) : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: primaryColor, size: 28),
+              const SizedBox(width: 16),
+              Text(
+                '$label:',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 17,
+                  color: primaryColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  value ?? '-',
+                  style: TextStyle(
+                    fontSize: 16, 
+                    color: Colors.black87,
+                    decoration: isClickable ? TextDecoration.underline : TextDecoration.none,
+                  ),
+                ),
+              ),
+              if (isClickable) const Icon(Icons.chevron_right, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // All possible ways to open email
+  Future<void> _launchEmail() async {
+    final email = widget.driver['email'];
+    if (email == null || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('No email registered'),
+          backgroundColor: dangerColor,
+        ),
+      );
+      return;
+    }
+
+    final subject = 'Contact from app';
+    final body = 'Dear ${widget.driver['nombre']},\n\n';
+
+    // Try all possible methods in sequence
+    final methods = [
+      // 1. Android Gmail App
+      if (Platform.isAndroid)
+        Uri(
+          scheme: 'com.google.android.gm',
+          host: 'compose',
+          queryParameters: {'to': email, 'subject': subject, 'body': body},
+        ),
+      
+      // 2. iOS Gmail App
+      if (Platform.isIOS)
+        Uri.parse('googlegmail:///co?to=$email&subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}'),
+      
+      // 3. Google Inbox (legacy)
+      Uri(
+        scheme: 'inbox-gmail',
+        path: 'compose',
+        queryParameters: {'to': email, 'subject': subject, 'body': body},
+      ),
+      
+      // 4. Gmail Web
+      Uri(
+        scheme: 'https',
+        host: 'mail.google.com',
+        path: '/mail/u/0/',
+        queryParameters: {'view': 'cm', 'fs': '1', 'to': email, 'su': subject, 'body': body},
+      ),
+      
+      // 5. Standard mailto
+      Uri(
+        scheme: 'mailto',
+        path: email,
+        queryParameters: {'subject': subject, 'body': body},
+      ),
+    ];
+
+    for (final uri in methods) {
+      if (uri == null) continue;
+      
+      try {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(
+            uri,
+            mode: LaunchMode.externalApplication,
+          );
+          return; // Success, exit function
+        }
+      } catch (e) {
+        debugPrint('Failed to launch $uri: $e');
+      }
+    }
+
+    // All methods failed, show fallback
+    await _showEmailFallbackDialog(email, subject, body);
+  }
+
+  // Fallback dialog with multiple options
+  Future<void> _showEmailFallbackDialog(String email, String subject, String body) async {
+    final emailContent = 'Email: $email\nSubject: $subject\n\n$body';
+
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Could not open email client'),
+          content: const Text('Please choose an alternative option:'),
+          actions: <Widget>[
+            // Copy email only
+            TextButton(
+              child: const Text('Copy Email'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: email));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Email copied to clipboard'),
+                    backgroundColor: accentColor,
+                  ),
+                );
+                Navigator.of(context).pop();
+              },
+            ),
+
+            // Copy all content
+            TextButton(
+              child: const Text('Copy All'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: emailContent));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('All content copied to clipboard'),
+                    backgroundColor: accentColor,
+                  ),
+                );
+                Navigator.of(context).pop();
+              },
+            ),
+
+            // Install Gmail (Android)
+            if (Platform.isAndroid)
+              TextButton(
+                child: const Text('Install Gmail'),
+                onPressed: () async {
+                  final Uri playStoreUri = Uri(
+                    scheme: 'https',
+                    host: 'play.google.com',
+                    path: '/store/apps/details',
+                    queryParameters: {'id': 'com.google.android.gm'},
+                  );
+                  await launchUrl(playStoreUri);
+                  Navigator.of(context).pop();
+                },
+              ),
+
+            // Install Gmail (iOS)
+            if (Platform.isIOS)
+              TextButton(
+                child: const Text('Install Gmail'),
+                onPressed: () async {
+                  final Uri appStoreUri = Uri(
+                    scheme: 'https',
+                    host: 'apps.apple.com',
+                    path: '/app/gmail-email-by-google/id422689480',
+                  );
+                  await launchUrl(appStoreUri);
+                  Navigator.of(context).pop();
+                },
+              ),
+
+            // Cancel
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Phone launch function
+  Future<void> _launchPhone() async {
+    final phone = widget.driver['telefono'];
+    if (phone == null || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('No phone number registered'),
+          backgroundColor: dangerColor,
+        ),
+      );
+      return;
+    }
+
+    final Uri phoneUri = Uri(
+      scheme: 'tel',
+      path: phone,
+    );
+
+    if (await canLaunchUrl(phoneUri)) {
+      await launchUrl(phoneUri);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Could not open phone app'),
+          backgroundColor: dangerColor,
+        ),
+      );
+    }
+  }
+
+  // Image widget builder
   Widget _buildImage(String? url) {
     if (_imageFile != null) {
       return ClipOval(
@@ -104,50 +336,24 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
     }
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Icon(icon, color: primaryColor, size: 28),
-          const SizedBox(width: 16),
-          Text(
-            '$label:',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 17,
-              color: primaryColor,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value ?? '-',
-              style: const TextStyle(fontSize: 16, color: Colors.black87),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // Image picker function
   Future<void> _pickImage() async {
     final source = await showDialog<ImageSource?>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Seleccionar imagen'),
-        content: const Text('Elige la fuente de la imagen'),
+        title: const Text('Select image source'),
+        content: const Text('Choose image source'),
         actions: [
           TextButton(
-            child: const Text('Cámara'),
+            child: const Text('Camera'),
             onPressed: () => Navigator.pop(context, ImageSource.camera),
           ),
           TextButton(
-            child: const Text('Galería'),
+            child: const Text('Gallery'),
             onPressed: () => Navigator.pop(context, ImageSource.gallery),
           ),
           TextButton(
-            child: const Text('Cancelar'),
+            child: const Text('Cancel'),
             onPressed: () => Navigator.pop(context, null),
           ),
         ],
@@ -175,7 +381,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al seleccionar imagen: $e'),
+            content: Text('Error selecting image: $e'),
             backgroundColor: dangerColor,
           ),
         );
@@ -183,6 +389,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
     }
   }
 
+  // Edit form dialog
   Future<void> _showForm() async {
     final formKey = GlobalKey<FormState>();
 
@@ -192,7 +399,6 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
     final licenseController = TextEditingController(text: widget.driver['licencia'] ?? '');
     final newPasswordController = TextEditingController();
 
-    // Variables para manejar sitio seleccionado y lista de sitios
     List<Map<String, dynamic>> sites = [];
     int? selectedSiteId = widget.driver['site_id'] is int
         ? widget.driver['site_id']
@@ -200,7 +406,6 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
 
     bool loadingSites = true;
 
-    // Función para cargar sitios
     Future<void> loadSites() async {
       try {
         final rawSites = await SiteService.getSites();
@@ -220,10 +425,9 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
         builder: (context, setDialogState) {
           return AlertDialog(
             backgroundColor: Colors.white,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Text(
-              'Editar Conductor',
+              'Edit Driver',
               style: TextStyle(
                 color: primaryColor,
                 fontWeight: FontWeight.bold,
@@ -257,21 +461,20 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                           ),
                           const SizedBox(height: 10),
                           const Text(
-                            'Toca la imagen para cambiar la foto',
+                            'Tap image to change photo',
                             style: TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                           const SizedBox(height: 20),
-                          _buildCustomTextField(nameController, 'Nombre', formKey),
+                          _buildCustomTextField(nameController, 'Name', formKey),
                           _buildCustomTextField(emailController, 'Email', formKey,
                               inputType: TextInputType.emailAddress),
-                          _buildCustomTextField(phoneController, 'Teléfono', formKey,
+                          _buildCustomTextField(phoneController, 'Phone', formKey,
                               inputType: TextInputType.phone),
-                          _buildCustomTextField(licenseController, 'Licencia', formKey),
+                          _buildCustomTextField(licenseController, 'License', formKey),
                           const SizedBox(height: 10),
-                          // Dropdown para seleccionar sitio
                           InputDecorator(
                             decoration: InputDecoration(
-                              labelText: 'Sitio',
+                              labelText: 'Site',
                               labelStyle: TextStyle(color: secondaryColor),
                               enabledBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: secondaryColor)),
@@ -282,10 +485,10 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                               child: DropdownButton<int>(
                                 isExpanded: true,
                                 value: selectedSiteId,
-                                hint: const Text('Selecciona un sitio'),
+                                hint: const Text('Select site'),
                                 items: sites.map((site) {
                                   final id = site['id'] ?? site['site_id'];
-                                  final name = site['name'] ?? 'Sin nombre';
+                                  final name = site['name'] ?? 'No name';
                                   return DropdownMenuItem<int>(
                                     value: id is int ? id : int.tryParse('$id'),
                                     child: Text(name),
@@ -303,7 +506,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                           TextFormField(
                             controller: newPasswordController,
                             decoration: InputDecoration(
-                              labelText: 'Nueva contraseña',
+                              labelText: 'New Password',
                               labelStyle: TextStyle(color: secondaryColor),
                               enabledBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: secondaryColor)),
@@ -313,7 +516,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                             obscureText: true,
                             validator: (value) {
                               if (value != null && value.isNotEmpty && value.length < 6) {
-                                return 'La contraseña debe tener al menos 6 caracteres';
+                                return 'Password must be at least 6 characters';
                               }
                               return null;
                             },
@@ -326,7 +529,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text('Cancelar',
+                child: Text('Cancel',
                     style: TextStyle(color: dangerColor, fontWeight: FontWeight.w600)),
               ),
               ElevatedButton(
@@ -340,7 +543,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                   if (selectedSiteId == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: const Text('Selecciona un sitio'),
+                        content: const Text('Please select a site'),
                         backgroundColor: dangerColor,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -370,7 +573,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: const Text('Conductor actualizado'),
+                        content: const Text('Driver updated'),
                         backgroundColor: accentColor,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -391,7 +594,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Error actualizando: $e'),
+                        content: Text('Error updating: $e'),
                         backgroundColor: dangerColor,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -399,7 +602,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
                     );
                   }
                 },
-                child: const Text('Guardar', style: TextStyle(fontSize: 16)),
+                child: const Text('Save', style: TextStyle(fontSize: 16)),
               ),
             ],
           );
@@ -420,7 +623,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
           enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: secondaryColor)),
           focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: primaryColor)),
         ),
-        validator: (v) => v == null || v.isEmpty ? 'Requerido' : null,
+        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
         keyboardType: inputType,
       ),
     );
@@ -436,24 +639,24 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
             const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
             const SizedBox(width: 10),
             Text(
-              'Confirmar eliminación',
+              'Confirm deletion',
               style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 20),
             ),
           ],
         ),
         content: const Text(
-          '¿Eliminar este conductor? Esta acción no se puede deshacer.',
+          'Delete this driver? This action cannot be undone.',
           style: TextStyle(fontSize: 16),
         ),
         actionsPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('Cancelar', style: TextStyle(color: secondaryColor, fontWeight: FontWeight.w600)),
+            child: Text('Cancel', style: TextStyle(color: secondaryColor, fontWeight: FontWeight.w600)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
+            child: const Text('Delete'),
             style: ElevatedButton.styleFrom(
               backgroundColor: dangerColor,
               padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
@@ -471,7 +674,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Conductor eliminado'),
+            content: const Text('Driver deleted'),
             backgroundColor: accentColor,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -482,7 +685,7 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error eliminando: $e'),
+            content: Text('Error deleting: $e'),
             backgroundColor: dangerColor,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -497,133 +700,140 @@ class _DriverDetailsPageState extends State<DriverDetailsPage> {
     final driver = widget.driver;
     final site = driver['site'] ?? {};
 
-   return AppScaffold(
-  appBarTitle: 'Detalle Conductor',
-  currentIndex: 2, // Cambia si tienes un índice fijo para conductores
-  currentDrawerIndex: 2,
-  body: Container(
-    color: Colors.white,
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Builder(
-            builder: (_) {
-              // 🔍 Log completo
-              print("DEBUG - driver: $driver");
-              print("DEBUG - site: $site");
-
-              // 🔍 Log campos específicos
-              print("DEBUG - foto_conductor: ${driver['foto_conductor']}");
-              print("DEBUG - nombre: ${driver['nombre']}");
-              print("DEBUG - email: ${driver['email']}");
-              print("DEBUG - telefono: ${driver['telefono']}");
-              print("DEBUG - licencia: ${driver['licencia']}");
-              print("DEBUG - sitio name: ${site['name']}");
-              print("DEBUG - sitio address: ${site['address']}");
-
-              return const SizedBox.shrink(); // No muestra nada visual
-            },
-          ),
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: Colors.white, width: 4),
-            ),
-            child: ClipOval(
-              child: _buildImage(driver['foto_conductor']),
-            ),
-          ),
-          const SizedBox(height: 25),
-          Text(
-            driver['nombre'] ?? 'Nombre no disponible',
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: Colors.black87,
-              letterSpacing: 1.1,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          Card(
-            color: Colors.white,
-            elevation: 4,
-            shadowColor: Colors.black12,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(
-                color: Colors.grey.shade400,
-                width: 1.5,
-              ),
-            ),
-            margin: const EdgeInsets.symmetric(vertical: 15),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 25),
-              child: Column(
-                children: [
-                  _buildInfoRow(Icons.email, 'Email', driver['email']),
-                  Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
-                  _buildInfoRow(Icons.phone, 'Teléfono', driver['telefono']),
-                  Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
-                  _buildInfoRow(Icons.card_membership, 'Licencia', driver['licencia']),
-                  Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
-                  _buildInfoRow(Icons.location_city, 'Sitio', site['name']),
-                  Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
-                  _buildInfoRow(Icons.location_on, 'Dirección', site['address']),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 40),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+    return AppScaffold(
+      appBarTitle: 'Driver Details',
+      currentIndex: 2,
+      currentDrawerIndex: 2,
+      body: Container(
+        color: Colors.white,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 25),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              ElevatedButton(
-                onPressed: _showForm,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  padding: const EdgeInsets.all(14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 6,
-                  shadowColor: Colors.greenAccent.shade700,
-                ),
-                child: const Icon(Icons.edit, size: 24, color: Colors.white),
+              Builder(
+                builder: (_) {
+                  print("DEBUG - driver: $driver");
+                  print("DEBUG - site: $site");
+                  print("DEBUG - foto_conductor: ${driver['foto_conductor']}");
+                  print("DEBUG - nombre: ${driver['nombre']}");
+                  print("DEBUG - email: ${driver['email']}");
+                  print("DEBUG - telefono: ${driver['telefono']}");
+                  print("DEBUG - licencia: ${driver['licencia']}");
+                  print("DEBUG - sitio name: ${site['name']}");
+                  print("DEBUG - sitio address: ${site['address']}");
+                  return const SizedBox.shrink();
+                },
               ),
-              const SizedBox(width: 20),
-              OutlinedButton(
-                onPressed: _deleteDriver,
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFB71C1C), width: 2),
-                  padding: const EdgeInsets.all(14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  backgroundColor: Colors.white,
-                ).copyWith(
-                  overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                    (states) {
-                      if (states.contains(MaterialState.pressed)) {
-                        return const Color(0xFFB71C1C).withOpacity(0.15);
-                      }
-                      return null;
-                    },
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(color: Colors.white, width: 4),
+                ),
+                child: ClipOval(
+                  child: _buildImage(driver['foto_conductor']),
+                ),
+              ),
+              const SizedBox(height: 25),
+              Text(
+                driver['nombre'] ?? 'Name not available',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                  letterSpacing: 1.1,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              Card(
+                color: Colors.white,
+                elevation: 4,
+                shadowColor: Colors.black12,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(
+                    color: Colors.grey.shade400,
+                    width: 1.5,
                   ),
                 ),
-                child: const Icon(Icons.delete_outline, size: 24, color: Color(0xFFB71C1C)),
+                margin: const EdgeInsets.symmetric(vertical: 15),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 25),
+                  child: Column(
+                    children: [
+                      _buildInfoRow(
+                        Icons.email, 
+                        'Email', 
+                        driver['email'],
+                        isClickable: true,
+                        onTap: _launchEmail,
+                      ),
+                      Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
+                      _buildInfoRow(
+                        Icons.phone, 
+                        'Phone', 
+                        driver['telefono'],
+                        isClickable: true,
+                        onTap: _launchPhone,
+                      ),
+                      Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
+                      _buildInfoRow(Icons.card_membership, 'License', driver['licencia']),
+                      Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
+                      _buildInfoRow(Icons.location_city, 'Site', site['name']),
+                      Divider(color: Colors.grey.shade300, thickness: 1, height: 20),
+                      _buildInfoRow(Icons.location_on, 'Address', site['address']),
+                    ],
+                  ),
+                ),
               ),
+              const SizedBox(height: 40),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: _showForm,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      padding: const EdgeInsets.all(14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 6,
+                      shadowColor: Colors.greenAccent.shade700,
+                    ),
+                    child: const Icon(Icons.edit, size: 24, color: Colors.white),
+                  ),
+                  const SizedBox(width: 20),
+                  OutlinedButton(
+                    onPressed: _deleteDriver,
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFB71C1C), width: 2),
+                      padding: const EdgeInsets.all(14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      backgroundColor: Colors.white,
+                    ).copyWith(
+                      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                        (states) {
+                          if (states.contains(MaterialState.pressed)) {
+                            return const Color(0xFFB71C1C).withOpacity(0.15);
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    child: const Icon(Icons.delete_outline, size: 24, color: Color(0xFFB71C1C)),
+                  ),
+                ],
+              )
             ],
-          )
-        ],
+          ),
+        ),
       ),
-    ),
-  ),
-);
-
+    );
   }
 }

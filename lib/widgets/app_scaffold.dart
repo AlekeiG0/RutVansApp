@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobil_rutvans/pages/Horarios/horarios.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../login.dart';
@@ -12,6 +13,7 @@ import '../pages/Locations/lista_sites_page.dart';
 import '../pages/NotificacionesPage.dart';
 import '../pages/UsuarioPage.dart';
 import '../pages/home_page.dart';
+import '../pages/Horarios/horarios.dart';
 import '../pages/unidades_page.dart';
 import '../services/auth_service.dart';
 import '../services/usuario_service.dart';
@@ -117,6 +119,9 @@ class _AppScaffoldState extends State<AppScaffold> {
             case 2:
               page = const DriversPage();
               break;
+            case 3:
+              page = const HorariosPage();
+              break;
             default:
               return;
           }
@@ -147,6 +152,13 @@ class _AppScaffoldState extends State<AppScaffold> {
               color: isIndexValid && bottomNavIndex == 2 ? primaryColor : Colors.grey.shade600,
             ),
             label: 'Conductores',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(
+              Icons.group,
+              color: isIndexValid && bottomNavIndex == 3 ? primaryColor : Colors.grey.shade600,
+            ),
+            label: 'Horarios',
           ),
         ],
       ),
@@ -282,12 +294,13 @@ class _AppScaffoldState extends State<AppScaffold> {
                 _buildDrawerItem(context, Icons.home_outlined, 'Inicio', 0, const HomePage()),
                 _buildDrawerItem(context, Icons.attach_money, 'Finanzas', 1, const FinanzasPage()),
                 _buildDrawerItem(context, Icons.group, 'Conductores', 2, const DriversPage()),
-                _buildDrawerItem(context, Icons.people_outline, 'Coordinadores', 3, const CoordinatorsPage()),
-                _buildDrawerItem(context, Icons.point_of_sale_outlined, 'Cajeros', 4, const CashiersPage()),
-                _buildDrawerItem(context, Icons.location_city_outlined, 'Localidades', 5, const LocalitiesPage()),
-                _buildDrawerItem(context, Icons.route_outlined, 'Rutas', 6, const RutasPage()),
-                _buildDrawerItem(context, Icons.map_outlined, 'Sitios', 7, const ListaSitesPage()),
-                _buildDrawerItem(context, Icons.directions_car_filled_outlined, 'Gestión de Vehículos', 8, const UnitsPage()),
+                _buildDrawerItem(context, Icons.group, 'Horarios', 3, const HorariosPage()),
+                _buildDrawerItem(context, Icons.people_outline, 'Coordinadores', 4, const CoordinatorsPage()),
+                _buildDrawerItem(context, Icons.point_of_sale_outlined, 'Cajeros', 5, const CashiersPage()),
+                _buildDrawerItem(context, Icons.location_city_outlined, 'Localidades', 6, const LocalitiesPage()),
+                _buildDrawerItem(context, Icons.route_outlined, 'Rutas', 7, const RutasPage()),
+                _buildDrawerItem(context, Icons.map_outlined, 'Sitios', 8, const ListaSitesPage()),
+                _buildDrawerItem(context, Icons.directions_car_filled_outlined, 'Gestión de Vehículos', 9, const UnitsPage()),
                 const Divider(color: Colors.grey),
                 ListTile(
                   leading: Icon(Icons.logout, color: drawerIconColor),

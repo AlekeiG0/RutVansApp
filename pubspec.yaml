@@ -36,11 +36,11 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_map_marker_popup: 6.1.2
   device_info_plus: ^11.5.0
+  image_picker: ^0.8.7+4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  image_picker: ^1.0.4
   url_launcher: ^6.1.12
   excel: ^2.0.5
   
