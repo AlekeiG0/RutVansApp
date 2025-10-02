@@ -1,16 +1,15 @@
-# mobil_rutvans
-
-A new Flutter project.
+# RutVansApp
+Proyecto app perfil administrador desarrollado en Flutter.
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+Este proyecto es un punto de inicio para una aplicación Flutter.
 
-A few resources to get you started if this is your first Flutter project:
+Algunos recursos útiles si es tu primera vez con Flutter:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- [Lab: Escribe tu primera app en Flutter](https://docs.flutter.dev/get-started/codelab)
+- [Cookbook: Ejemplos útiles de Flutter](https://docs.flutter.dev/cookbook)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Para más ayuda sobre Flutter, visita la 
+[documentación en línea](https://docs.flutter.dev/), donde encontrarás tutoriales,
+ejemplos, guías sobre desarrollo móvil y la referencia completa de la API.
