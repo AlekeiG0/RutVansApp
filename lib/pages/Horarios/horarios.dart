@@ -66,119 +66,199 @@ class _HorariosPageState extends State<HorariosPage> {
   }
 
   Future<void> _showForm({Map<String, dynamic>? schedule}) async {
-    final isEditing = schedule != null;
-    final formKey = GlobalKey<FormState>();
-    final dateController = TextEditingController(
-      text: isEditing ? schedule['schedule_date'] : '',
-    );
-    final timeController = TextEditingController(
-      text: isEditing ? schedule['schedule_time'] : '',
-    );
-    final statusController = TextEditingController(
-      text: isEditing ? schedule['status'] : 'activo',
-    );
+  final isEditing = schedule != null;
+  final formKey = GlobalKey<FormState>();
 
-    int? selectedRouteUnitId = isEditing ? schedule['route_unit_id'] : null;
-    bool loadingRouteUnits = _routeUnits.isEmpty;
-    final colors = _getColors();
+  // Normalizar estado
+  final initialStatus = isEditing
+      ? (schedule['status']?.toLowerCase() ?? 'activo')
+      : 'activo';
 
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          if (loadingRouteUnits && _routeUnits.isEmpty) {
-            ScheduleService.getRouteUnits().then((data) {
-              setDialogState(() {
-                _routeUnits = data;
-                _routeUnitsMap.clear();
-                for (var unit in data) {
-                  _routeUnitsMap[unit['id']] = unit;
-                }
-                loadingRouteUnits = false;
-              });
-            }).catchError((e) {
-              setDialogState(() => loadingRouteUnits = false);
-              _showMessage('Error cargando unidades: $e');
-            });
-          }
+  final dateController =
+      TextEditingController(text: isEditing ? schedule['schedule_date'] : '');
+  final timeController =
+      TextEditingController(text: isEditing ? schedule['schedule_time'] : '');
+  final statusController = TextEditingController(text: initialStatus);
 
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Text(
-              isEditing ? 'Editar Horario' : 'Nuevo Horario',
-              style: TextStyle(color: colors['primary']),
-            ),
-            content: SingleChildScrollView(
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildRouteUnitDropdown(
-                      routeUnits: _routeUnits,
-                      loading: loadingRouteUnits,
-                      selectedId: selectedRouteUnitId,
-                      onChanged: (val) => selectedRouteUnitId = val,
-                      colors: colors,
-                    ),
-                    const SizedBox(height: 15),
-                    _buildDateField(dateController, colors),
-                    const SizedBox(height: 15),
-                    _buildTimeField(timeController, colors),
-                    const SizedBox(height: 15),
-                    _buildStatusDropdown(statusController, colors),
-                  ],
-                ),
+  int? selectedRouteUnitId = isEditing ? schedule['route_unit_id'] : null;
+  final colors = _getColors();
+
+  // Cargar unidades antes de abrir modal
+  if (_routeUnits.isEmpty) {
+    try {
+      final data = await ScheduleService.getRouteUnits();
+      _routeUnits = data;
+      _routeUnitsMap.clear();
+      for (var unit in data) _routeUnitsMap[unit['id']] = unit;
+    } catch (e) {
+      _showMessage('Error cargando unidades: $e');
+      return;
+    }
+  }
+
+  await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) {
+      final media = MediaQuery.of(context);
+      final screenWidth = media.size.width;
+      final screenHeight = media.size.height;
+      final bool isLandscape = screenWidth > screenHeight;
+
+      final double dialogWidth = screenWidth > 600 ? 500 : screenWidth * 0.9;
+      final double dialogMaxHeight = screenHeight * 0.9;
+
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          isEditing ? 'Editar Horario' : 'Nuevo Horario',
+          style: TextStyle(color: colors['primary']),
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: dialogWidth, maxHeight: dialogMaxHeight),
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Dropdown unidad
+                  _buildRouteUnitDropdown(
+                    routeUnits: _routeUnits,
+                    loading: false,
+                    selectedId: selectedRouteUnitId,
+                    onChanged: (val) => selectedRouteUnitId = val,
+                    colors: colors,
+                  ),
+                  const SizedBox(height: 15),
+
+                  // Fecha y Hora responsive
+                  Builder(
+                    builder: (context) {
+                      if (screenWidth > 400) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            SizedBox(
+                              width: (dialogWidth * 0.45).clamp(150, 250),
+                              child: _buildDateField(dateController, colors),
+                            ),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: (dialogWidth * 0.45).clamp(150, 250),
+                              child: _buildTimeField(timeController, colors),
+                            ),
+                          ],
+                        );
+                      } else {
+                        return Column(
+                          children: [
+                            _buildDateField(dateController, colors),
+                            const SizedBox(height: 15),
+                            _buildTimeField(timeController, colors),
+                          ],
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 15),
+
+                  // Dropdown estado
+                  DropdownButtonFormField<String>(
+                    value: statusController.text.isNotEmpty
+                        ? statusController.text
+                        : 'activo',
+                    items: const [
+                      DropdownMenuItem<String>(
+                        value: 'activo',
+                        child: Text('Activo'),
+                      ),
+                      DropdownMenuItem<String>(
+                        value: 'inactivo',
+                        child: Text('Inactivo'),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) statusController.text = val;
+                    },
+                    decoration: _inputDecoration('Estado', colors),
+                    validator: (v) =>
+                        v == null || v.isEmpty ? 'Seleccione un estado' : null,
+                  ),
+                ],
               ),
             ),
-            actions: _buildFormActions(
-              onCancel: () => Navigator.pop(context),
-              onConfirm: () async {
-                if (!formKey.currentState!.validate()) return;
-                if (selectedRouteUnitId == null) {
-                  _showMessage('Seleccione una unidad');
-                  return;
-                }
+          ),
+        ),
 
-                try {
-                  if (isEditing) {
-                    await ScheduleService.updateSchedule(
-                      id: schedule['id'],
-                      routeUnitId: selectedRouteUnitId!,
-                      scheduleDate: dateController.text,
-                      scheduleTime: timeController.text,
-                      status: statusController.text,
-                    );
-                    _showMessage('Horario actualizado');
-                  } else {
-                    await ScheduleService.createSchedule(
-                      routeUnitId: selectedRouteUnitId!,
-                      scheduleDate: dateController.text,
-                      scheduleTime: timeController.text,
-                      status: statusController.text,
-                    );
-                    _showMessage('Horario creado');
+        // Botones adaptativos
+        actionsPadding: EdgeInsets.zero,
+        contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        actions: [
+          Builder(
+            builder: (context) {
+              final isWide = isLandscape || screenWidth > 400;
+
+              final formButtons = _buildFormActions(
+                onCancel: () => Navigator.pop(context),
+                onConfirm: () async {
+                  if (!formKey.currentState!.validate()) return;
+                  if (selectedRouteUnitId == null) {
+                    _showMessage('Seleccione una unidad');
+                    return;
                   }
-                  
-                  if (!mounted) return;
-                  Navigator.pop(context);
-                  await _loadInitialData();
-                } catch (e) {
-                  if (!mounted) return;
-                  _showMessage('Error: ${e.toString()}');
-                }
-              },
-              colors: colors,
-              isEditing: isEditing,
-            ),
-          );
-        },
-      ),
-    );
-  }
+
+                  try {
+                    if (isEditing) {
+                      await ScheduleService.updateSchedule(
+                        id: schedule!['id'],
+                        routeUnitId: selectedRouteUnitId!,
+                        scheduleDate: dateController.text,
+                        scheduleTime: timeController.text,
+                        status: statusController.text,
+                      );
+                      _showMessage('Horario actualizado');
+                    } else {
+                      await ScheduleService.createSchedule(
+                        routeUnitId: selectedRouteUnitId!,
+                        scheduleDate: dateController.text,
+                        scheduleTime: timeController.text,
+                        status: statusController.text,
+                      );
+                      _showMessage('Horario creado');
+                    }
+
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    await _loadInitialData();
+                  } catch (e) {
+                    if (!mounted) return;
+                    _showMessage('Error: ${e.toString()}');
+                  }
+                },
+                colors: colors,
+                isEditing: isEditing,
+              );
+
+              if (isWide) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: formButtons,
+                );
+              } else {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: formButtons,
+                );
+              }
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
 
   Future<void> _deleteSchedule(int id) async {
     final confirmed = await showDialog<bool>(
