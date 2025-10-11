@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../services/api_service.dart';
-import '../../../widgets/App_Scaffold.dart';
+import '../../../widgets/app_scaffold.dart';
 
 class RepoVentasPage extends StatefulWidget {
   const RepoVentasPage({super.key});
@@ -155,11 +155,11 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
     for (final m in lista) {
       final f = DateTime.tryParse('${m[campoFecha]}');
       if (f == null) continue;
-      minD = (minD == null || f.isBefore(minD!)) ? f : minD;
-      maxD = (maxD == null || f.isAfter(maxD!)) ? f : maxD;
+  minD = (minD == null || f.isBefore(minD)) ? f : minD;
+  maxD = (maxD == null || f.isAfter(maxD)) ? f : maxD;
     }
     if (minD == null || maxD == null) return null;
-    return (minD!, maxD!);
+  return (minD, maxD);
   }
 
   @override

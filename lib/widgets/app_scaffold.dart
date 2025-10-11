@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mobil_rutvans/pages/Horarios/horarios.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/notification_service.dart';
+import '../models/notification_model.dart';
+import 'dart:async';
 
 import '../login.dart';
 import '../pages/Cajeros/cashier_page.dart';
@@ -13,7 +16,7 @@ import '../pages/Locations/lista_sites_page.dart';
 import '../pages/NotificacionesPage.dart';
 import '../pages/UsuarioPage.dart';
 import '../pages/home_page.dart';
-import '../pages/Horarios/horarios.dart';
+// ...existing imports...
 import '../pages/unidades_page.dart';
 import '../services/auth_service.dart';
 import '../services/usuario_service.dart';
@@ -54,11 +57,26 @@ class _AppScaffoldState extends State<AppScaffold> {
   final Color drawerTextColor = const Color(0xFF4E342E); // marrón oscuro suave para texto
   final Color drawerIconColor = const Color(0xFFE65100); // naranja oscuro para iconos
   final Color dividerColor = Colors.grey.shade300;
+  int _unreadCount = 0;
+  StreamSubscription<List<NotificationModel>>? _notifSub;
 
   @override
   void initState() {
     super.initState();
     _cargarDatosUsuario();
+    // Inicializar servicio de notificaciones y suscripción para badge
+    NotificationService().init().then((_) {
+      _notifSub = NotificationService().stream.listen((list) {
+        final unread = list.where((n) => !n.leido).length;
+        setState(() => _unreadCount = unread);
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _cargarDatosUsuario() async {
@@ -202,29 +220,30 @@ class _AppScaffoldState extends State<AppScaffold> {
               clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.notifications, color: Colors.white, size: 28),
-                Positioned(
-                  right: -2,
-                  top: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: primaryColor, width: 2),
-                    ),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: const Center(
-                      child: Text(
-                        '3',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                if (_unreadCount > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: primaryColor, width: 2),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Center(
+                        child: Text(
+                          _unreadCount > 99 ? '99+' : '$_unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -301,6 +320,7 @@ class _AppScaffoldState extends State<AppScaffold> {
                 _buildDrawerItem(context, Icons.route_outlined, 'Rutas', 7, const RutasPage()),
                 _buildDrawerItem(context, Icons.map_outlined, 'Sitios', 8, const ListaSitesPage()),
                 _buildDrawerItem(context, Icons.directions_car_filled_outlined, 'Gestión de Vehículos', 9, const UnitsPage()),
+                _buildDrawerItem(context, Icons.notifications_outlined, 'Notificaciones', 10, const NotificacionesPage(), badgeCount: _unreadCount),
                 const Divider(color: Colors.grey),
                 ListTile(
                   leading: Icon(Icons.logout, color: drawerIconColor),
@@ -364,7 +384,7 @@ class _AppScaffoldState extends State<AppScaffold> {
     );
   }
 
-  Widget _buildDrawerItem(BuildContext context, IconData icon, String label, int index, Widget page) {
+  Widget _buildDrawerItem(BuildContext context, IconData icon, String label, int index, Widget page, {int badgeCount = 0}) {
     final selected = index == widget.currentDrawerIndex;
 
     return Container(
@@ -386,6 +406,16 @@ class _AppScaffoldState extends State<AppScaffold> {
             Navigator.push(context, MaterialPageRoute(builder: (_) => page));
           }
         },
+        trailing: badgeCount > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(12)),
+                child: Text(
+                  badgeCount > 99 ? '99+' : '$badgeCount',
+                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+              )
+            : null,
       ),
     );
   }

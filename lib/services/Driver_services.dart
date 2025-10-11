@@ -3,6 +3,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import '../config/api_config.dart';
+import 'notification_service.dart';
+import '../models/notification_model.dart';
+import 'package:uuid/uuid.dart';
 
 class DriverService {
   static String get _baseUrl => '${ApiConfig.baseUrl}/api/admin/drivers';
@@ -94,6 +97,36 @@ static Future<Map<String, dynamic>> getDriver(int id) async {
 
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception('Error al crear conductor: ${response.statusCode} - ${response.body}');
+    }
+    // Si la creación fue exitosa, intentamos crear una notificación interna
+    try {
+      final parsed = json.decode(response.body);
+      String nombreCreado = '';
+      if (parsed is Map<String, dynamic>) {
+        if (parsed.containsKey('data')) {
+          final data = parsed['data'];
+          if (data is Map<String, dynamic>) {
+            nombreCreado = data['nombre']?.toString() ?? data['name']?.toString() ?? '';
+          }
+        } else {
+          nombreCreado = parsed['nombre']?.toString() ?? parsed['name']?.toString() ?? '';
+        }
+      }
+
+      final uuid = const Uuid();
+      final notif = NotificationModel(
+        id: uuid.v4(),
+        titulo: 'Nuevo conductor',
+        mensaje: nombreCreado.isNotEmpty ? 'Se creó el conductor $nombreCreado' : 'Se creó un nuevo conductor',
+        tipo: 'info',
+        fecha: DateTime.now(),
+        leido: false,
+      );
+
+      await NotificationService().add(notif);
+    } catch (e) {
+      // No bloquear la creación si falla la notificación; sólo logueamos
+      print('[NOTIF] Error al crear notificación interna: $e');
     }
   }
 
