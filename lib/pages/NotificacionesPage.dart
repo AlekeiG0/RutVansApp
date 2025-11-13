@@ -86,7 +86,7 @@ class NotificacionesPage extends StatelessWidget {
             ),
           );
         },
-      ),
+      ), title: '',
     );
   }
 }

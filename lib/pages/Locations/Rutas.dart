@@ -156,7 +156,7 @@ class _RutasPageState extends State<RutasPage> {
         icon: const Icon(Icons.add),
         label: const Text('Agregar Ruta'),
         backgroundColor: Colors.teal,
-      ),
+      ), title: '',
     );
   }
 

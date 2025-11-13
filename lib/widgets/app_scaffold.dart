@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mobil_rutvans/pages/Horarios/horarios.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../login.dart';
@@ -26,6 +25,7 @@ class AppScaffold extends StatefulWidget {
   final Widget? floatingActionButton;
   final String? email;
   final String? appBarTitle;
+  final String title;
 
   const AppScaffold({
     super.key,
@@ -35,6 +35,7 @@ class AppScaffold extends StatefulWidget {
     this.currentDrawerIndex = -1,
     this.floatingActionButton,
     this.appBarTitle,
+    this.title = '', 
   });
 
   @override
@@ -155,7 +156,7 @@ class _AppScaffoldState extends State<AppScaffold> {
           ),
           BottomNavigationBarItem(
             icon: Icon(
-              Icons.group,
+              Icons.calendar_month,
               color: isIndexValid && bottomNavIndex == 3 ? primaryColor : Colors.grey.shade600,
             ),
             label: 'Horarios',
@@ -294,7 +295,7 @@ class _AppScaffoldState extends State<AppScaffold> {
                 _buildDrawerItem(context, Icons.home_outlined, 'Inicio', 0, const HomePage()),
                 _buildDrawerItem(context, Icons.attach_money, 'Finanzas', 1, const FinanzasPage()),
                 _buildDrawerItem(context, Icons.group, 'Conductores', 2, const DriversPage()),
-                _buildDrawerItem(context, Icons.group, 'Horarios', 3, const HorariosPage()),
+                _buildDrawerItem(context, Icons.calendar_month, 'Horarios', 3, const HorariosPage()),
                 _buildDrawerItem(context, Icons.people_outline, 'Coordinadores', 4, const CoordinatorsPage()),
                 _buildDrawerItem(context, Icons.point_of_sale_outlined, 'Cajeros', 5, const CashiersPage()),
                 _buildDrawerItem(context, Icons.location_city_outlined, 'Localidades', 6, const LocalitiesPage()),

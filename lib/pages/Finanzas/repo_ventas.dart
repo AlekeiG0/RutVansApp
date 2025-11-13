@@ -186,7 +186,7 @@ class _RepoVentasPageState extends State<RepoVentasPage> {
                   _buildTopRutas(),
                 ],
               ),
-      ),
+      ), title: '',
     );
   }
 

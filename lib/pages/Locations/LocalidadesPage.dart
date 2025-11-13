@@ -380,7 +380,7 @@ class _LocalitiesPageState extends State<LocalitiesPage> {
         },
         child: AppScaffold(
           currentIndex: -1,
-          body: const Center(child: CircularProgressIndicator()),
+          body: const Center(child: CircularProgressIndicator()), title: '',
         ),
       );
     }
@@ -417,7 +417,7 @@ class _LocalitiesPageState extends State<LocalitiesPage> {
               ),
             ],
           ),
-        ),
+        ), title: '',
       ),
     );
   }
